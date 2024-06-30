@@ -66,3 +66,25 @@ class BaseVariationalLayer_(nn.Module):
             sigma_q) + (sigma_q**2 + (mu_q - mu_p)**2) / (2 *
                                                           (sigma_p**2)) - 0.5
         return kl.mean()
+
+    def kl_div_multivariate_gaussian(self, mu_q, sigma_q, mu_p, sigma_p):
+        """
+        Calculates kl divergence between two multivariate gaussians (Q || P)
+
+        Parameters:
+             * mu_q: torch.Tensor -> mu parameter of distribution Q
+             * sigma_q: torch.Tensor -> sigma parameter of distribution Q
+             * mu_p: float -> mu parameter of distribution P
+             * sigma_p: float -> sigma parameter of distribution P
+
+        returns torch.Tensor of shape 0
+        """
+        kl = 0.5 * (torch.logdet(sigma_p) - torch.logdet(sigma_q) +
+                    torch.trace(torch.matmul(torch.inverse(sigma_p), sigma_q)) +
+                    torch.matmul(torch.matmul((mu_q - mu_p).unsqueeze(-1).permute(1, 0), torch.inverse(sigma_p)), (mu_q - mu_p).unsqueeze(-1)).squeeze() - mu_p.shape[0])
+        return kl.mean()
+    
+        # kl = 0.5 * (torch.logdet(sigma_p) - torch.logdet(sigma_q) +
+        #             torch.trace(torch.matmul(torch.inverse(sigma_p), sigma_q)) +
+        #             torch.matmul(torch.matmul((mu_q - mu_p).T, torch.inverse(sigma_p)), (mu_q - mu_p)) - mu_p.shape[0])
+        # return kl
