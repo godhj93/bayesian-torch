@@ -457,7 +457,11 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         weight_size = out_channels * (in_channels // groups) * kernel_size[0] * kernel_size[1]
 
         self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))
-        self.L = Parameter(torch.eye(weight_size))
+        self.rho_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))
+        
+        # Initialize L as a random matrix and make it symmetric with ones on the diagonal
+        self.L = Parameter(torch.randn(weight_size, weight_size))
+        self.register_buffer('identity', torch.eye(weight_size))
 
         if self.bias:
             self.mu_bias = Parameter(torch.Tensor(out_channels))
@@ -476,31 +480,32 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.quant_prepare = False
 
     def init_parameters(self):
-        # self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
-        self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.0)
-        # self.L.data.normal_(mean=0, std=0.1)
-        self.L.data.normal_(mean=0, std=0.0)
-        self.L.data += torch.eye(self.L.size(0))  # Ensure positive definite
+        self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
+        self.rho_kernel.data.normal_(mean=self.posterior_rho_init, std=0.1)
+        self.L.data.normal_(mean=0, std=0.1)
 
         if self.bias:
             self.mu_bias.data.normal_(mean=self.posterior_mu_init, std=0.1)
             self.rho_bias.data.normal_(mean=self.posterior_rho_init, std=0.1)
 
-    def forward(self, input, return_kl=True):
+    def get_covariance_matrix(self):
+        # Create a symmetric matrix with ones on the diagonal
+        L = self.L + self.L.T
+        L = L - torch.diag(torch.diag(L)) + self.identity
+        return L @ L.T
 
+    def forward(self, input, return_kl=True):
         weight_shape = self.mu_kernel.shape
-        weight_flat_shape = (-1,)
 
         mu_flat = self.mu_kernel.view(-1)
-        cov_flat = self.L @ self.L.T
-        
+        cov_flat = self.get_covariance_matrix()  # Full covariance matrix
+
         mvn = MultivariateNormal(mu_flat, covariance_matrix=cov_flat)
         weight_flat = mvn.rsample()
         weight = weight_flat.view(weight_shape)
 
         if return_kl:
-            # sigma_weight = torch.diagonal(cov_flat, 0)
-            kl_weight = self.kl_div_multivariate_gaussian(self.mu_kernel.view(-1), cov_flat, torch.full_like(mu_flat, self.prior_mean), torch.eye(mu_flat.size(0)) * self.prior_variance)
+            kl_weight = self.kl_div_multivariate_gaussian(mu_flat, cov_flat, torch.full_like(mu_flat, self.prior_mean), torch.eye(mu_flat.size(0)) * self.prior_variance)
 
         bias = None
         if self.bias:
