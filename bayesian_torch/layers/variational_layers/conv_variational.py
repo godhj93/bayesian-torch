@@ -418,7 +418,8 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
                  bias=False):
         """
         Implements Conv2d layer with reparameterization trick using multivariate Gaussian distribution.
-
+        @Author: Heejung Shin, godhj@unist.ac.kr
+        
         Parameters:
             in_channels: int -> number of channels in the input image,
             out_channels: int -> number of channels produced by the convolution,
@@ -433,7 +434,6 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
             posterior_rho_init: float -> init trainable rho parameter representing the sigma of the approximate posterior through softplus function,
             bias: bool -> if set to False, the layer will not learn an additive bias. Default: True,
         """
-
         super(Conv2dReparameterization_Multivariate, self).__init__()
         if in_channels % groups != 0:
             raise ValueError('invalid in_channels size')
@@ -459,9 +459,8 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))
         self.rho_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))
         
-        # Initialize L as a random matrix and make it symmetric with ones on the diagonal
-        self.L = Parameter(torch.randn(weight_size, weight_size))
-        self.register_buffer('identity', torch.eye(weight_size))
+        # Register the lower triangular part of the matrix as a learnable parameter
+        self.L_param = Parameter(torch.randn(weight_size, weight_size))
 
         if self.bias:
             self.mu_bias = Parameter(torch.Tensor(out_channels))
@@ -482,17 +481,20 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
     def init_parameters(self):
         self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
         self.rho_kernel.data.normal_(mean=self.posterior_rho_init, std=0.1)
-        self.L.data.normal_(mean=0, std=0.1)
+        
+        # Initialize the L_param to form a lower triangular matrix that corresponds to the identity matrix
+        with torch.no_grad():
+            self.L_param.copy_(torch.eye(self.L_param.size(0)))
 
         if self.bias:
             self.mu_bias.data.normal_(mean=self.posterior_mu_init, std=0.1)
             self.rho_bias.data.normal_(mean=self.posterior_rho_init, std=0.1)
 
     def get_covariance_matrix(self):
-        # Create a symmetric matrix with ones on the diagonal
-        L = self.L + self.L.T
-        L = L - torch.diag(torch.diag(L)) + self.identity
-        return L @ L.T
+        # Construct the lower triangular matrix
+        L = torch.tril(self.L_param)
+        covariance_matrix = L @ L.T
+        return covariance_matrix
 
     def forward(self, input, return_kl=True):
         weight_shape = self.mu_kernel.shape
@@ -500,6 +502,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         mu_flat = self.mu_kernel.view(-1)
         cov_flat = self.get_covariance_matrix()  # Full covariance matrix
 
+        # Use MultivariateNormal for sampling
         mvn = MultivariateNormal(mu_flat, covariance_matrix=cov_flat)
         weight_flat = mvn.rsample()
         weight = weight_flat.view(weight_shape)
@@ -525,7 +528,6 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
             return out, kl
             
         return out
-    
 class Conv3dReparameterization(BaseVariationalLayer_):
     def __init__(self,
                  in_channels,
