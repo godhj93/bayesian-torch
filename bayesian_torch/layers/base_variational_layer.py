@@ -79,12 +79,10 @@ class BaseVariationalLayer_(nn.Module):
 
         returns torch.Tensor of shape 0
         """
+
         kl = 0.5 * (torch.logdet(sigma_p).to(device) - torch.logdet(sigma_q).to(device) +
-                    torch.trace(torch.matmul(torch.inverse(sigma_p).to(device), sigma_q.to(device))) +
+                    torch.trace(torch.matmul(sigma_q.to(device), torch.inverse(sigma_p).to(device))) +
                     torch.matmul(torch.matmul((mu_q.to(device) - mu_p.to(device)).unsqueeze(-1).permute(1, 0), torch.inverse(sigma_p.to(device))), (mu_q.cuda() - mu_p.cuda()).unsqueeze(-1)).squeeze() - mu_p.shape[0])
         return kl.mean()
     
-        # kl = 0.5 * (torch.logdet(sigma_p) - torch.logdet(sigma_q) +
-        #             torch.trace(torch.matmul(torch.inverse(sigma_p), sigma_q)) +
-        #             torch.matmul(torch.matmul((mu_q - mu_p).T, torch.inverse(sigma_p)), (mu_q - mu_p)) - mu_p.shape[0])
-        # return kl
+        

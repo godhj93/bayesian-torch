@@ -404,18 +404,18 @@ class Conv2dReparameterization(BaseVariationalLayer_):
 
 class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
     def __init__(self,
-                 in_channels,
-                 out_channels,
-                 kernel_size,
-                 stride=1,
-                 padding=0,
-                 dilation=1,
-                 groups=1,
-                 prior_mean=0,
-                 prior_variance=1,
-                 posterior_mu_init=0,
-                 posterior_rho_init=-3.0,
-                 bias=False):
+                in_channels,
+                out_channels,
+                kernel_size,
+                stride=1,
+                padding=0,
+                dilation=1,
+                groups=1,
+                prior_mean = None,
+                prior_variance = None,
+                posterior_mu_init=0,
+                posterior_rho_init=-3.0,
+                bias=False):
         """
         Implements Conv2d layer with reparameterization trick using multivariate Gaussian distribution.
         @Author: Heejung Shin, godhj@unist.ac.kr
@@ -456,11 +456,22 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         kernel_size = self.kernel_size
         weight_size = out_channels * (in_channels // groups) * kernel_size[0] * kernel_size[1]
 
+        if self.prior_mean is None:
+            self.prior_mean = torch.zeros(weight_size)
+        else:
+            self.prior_mean = prior_mean.view(-1)
+            
+        if self.prior_variance is None:
+            self.prior_variance = torch.eye(weight_size) 
+        else:
+            self.prior_variance = self.get_covariance_matrix(prior_variance)
+        
         self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))
         self.rho_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))
         
         # Register the lower triangular part of the matrix as a learnable parameter
-        self.L_param = Parameter(torch.randn(weight_size, weight_size))
+        # self.L_param = Parameter(torch.randn(1, weight_size))
+        self.L_param = Parameter(torch.Tensor(1, weight_size))
 
         if self.bias:
             self.mu_bias = Parameter(torch.Tensor(out_channels))
@@ -483,24 +494,29 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.rho_kernel.data.normal_(mean=self.posterior_rho_init, std=0.1)
         
         # Initialize the L_param to form a lower triangular matrix that corresponds to the identity matrix
-        with torch.no_grad():
-            self.L_param.copy_(torch.eye(self.L_param.size(0)))
-
+        # with torch.no_grad():
+        #     self.L_param.copy_(torch.eye(self.L_param.size(0)))
+        self.L_param.data.normal_(mean=0, std=0.1)
+        # print("L is initialized as: ", self.L_param.data)
         if self.bias:
             self.mu_bias.data.normal_(mean=self.posterior_mu_init, std=0.1)
             self.rho_bias.data.normal_(mean=self.posterior_rho_init, std=0.1)
 
-    def get_covariance_matrix(self):
-        # Construct the lower triangular matrix
-        L = torch.tril(self.L_param)
-        covariance_matrix = L @ L.T
+    def get_covariance_matrix(self, param_vec):        
+        covariance_matrix = param_vec.T @ param_vec + torch.eye(param_vec.size(1)).to(param_vec.device)
+        # Check if the covariance matrix is positive definite
+        
+        # covariance_matrix += torch.linalg.eigvalsh(covariance_matrix).min().abs() * torch.eye(covariance_matrix.shape[0]).to(covariance_matrix.device)
+        if not torch.all(torch.linalg.eigvalsh(covariance_matrix) >= 0):
+            print("Covariance matrix is not positive definite")
+
         return covariance_matrix
 
     def forward(self, input, return_kl=True):
         weight_shape = self.mu_kernel.shape
 
         mu_flat = self.mu_kernel.view(-1)
-        cov_flat = self.get_covariance_matrix()  # Full covariance matrix
+        cov_flat = self.get_covariance_matrix(self.L_param)  # Full covariance matrix
 
         # Use MultivariateNormal for sampling
         mvn = MultivariateNormal(mu_flat, covariance_matrix=cov_flat)
@@ -508,7 +524,8 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         weight = weight_flat.view(weight_shape)
 
         if return_kl:
-            kl_weight = self.kl_div_multivariate_gaussian(mu_flat, cov_flat, torch.full_like(mu_flat, self.prior_mean), torch.eye(mu_flat.size(0)) * self.prior_variance)
+            # kl_weight = self.kl_div_multivariate_gaussian(mu_flat, cov_flat, torch.full_like(mu_flat, self.prior_mean), torch.eye(mu_flat.size(0)) * self.prior_variance)
+            kl_weight = self.kl_div_multivariate_gaussian(mu_flat, cov_flat, self.prior_mean, self.prior_variance)
 
         bias = None
         if self.bias:
