@@ -25,7 +25,7 @@ def main(args):
         raise ValueError('Model not found')
         
     # # Multi-GPU
-    if torch.cuda.device_count() > 1:
+    if torch.cuda.device_count() > 1 and args.multi_gpu:
         local_rank = int(os.environ.get('LOCAL_RANK'))
         dist.init_process_group(backend='nccl')
         rank = dist.get_rank()
@@ -34,10 +34,7 @@ def main(args):
         model = DDP(model.to(device), device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
     else:
         model.to(device)
-        
-        
-        
-        
+    
     # Optimizer
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
     
@@ -45,11 +42,11 @@ def main(args):
     train_dataset = datasets.MNIST(root='./data/', train=True, transform=transforms.ToTensor(), download=True)
     test_dataset = datasets.MNIST(root='./data/', train=False, transform=transforms.ToTensor())
     
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=32)
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=32)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
+    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
     
     date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    log_path = 'runs/{}_bs{}_lr{}_mc{}_ep{}_{}'.format(args.model, args.bs, args.lr, args.mc_runs, args.epochs, date)
+    log_path = 'runs/{}_bs{}_lr{}_mc{}_temp_{}_ep{}_{}'.format(args.model, args.bs, args.lr, args.mc_runs, args.t, args.epochs, date)
     writer = SummaryWriter(log_path)
     
     if args.model == 'dnn':
@@ -69,7 +66,8 @@ def main(args):
                   mc_runs = args.mc_runs, 
                   bs = args.bs, 
                   writer = writer,
-                  device = device)
+                  device = device,
+                  args = args)
 
 if __name__ == '__main__':
     
@@ -79,7 +77,8 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--bs', type=int, default=1024, help='Batch size')
     parser.add_argument('--model', type=str, default='multi', help='Model to train [dnn, uni, multi]')
-    
+    parser.add_argument('--multi_gpu', type=bool, default=False, help='Use multi-gpu')
+    parser.add_argument('--t', type=float, default=1.0, help='Cold Posterior temperature')
     args = parser.parse_args()
     print(colored(args, 'blue'))
     main(args)

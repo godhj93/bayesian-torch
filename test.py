@@ -28,14 +28,15 @@ def main(args):
     
     
     if args.model == 'dnn':
-        acc = test_DNN(model = model,
+        acc, nnl = test_DNN(model = model,
                  test_loader= test_loader)
-        nnl, kl = None, None
+        kl = 0.0
     else:
         acc, nnl, kl = test_BNN(model = model,
                  test_loader = test_loader,
                  mc_runs = args.mc_runs,
-                 bs = args.bs)
+                 bs = args.bs,
+                 device = device)
     
     print(colored(f"Test accuracy: {acc:.3f}, NNL: {nnl:.3f}, KL: {kl:.3f}", 'green'))
     
@@ -45,7 +46,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='multi', help='[dnn, uni, multi]')
     parser.add_argument('--bs', type=int, default=10000, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
-    parser.add_argument('--mc_runs', type=int, default=10, help='Monte Carlo runs')
+    parser.add_argument('--mc_runs', type=int, default=100, help='Monte Carlo runs')
     parser.add_argument('--weight', type=str, help='Path to load weights')
     args = parser.parse_args()
     

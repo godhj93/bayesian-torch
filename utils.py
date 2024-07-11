@@ -6,7 +6,7 @@ import os
 from termcolor import colored
 
     
-def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, mc_runs=10, bs=512, device='cuda'):
+def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs, bs, device):
 
     # model.to(device)
     best_loss = torch.inf
@@ -37,7 +37,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, mc_run
             
             nnl = F.cross_entropy(output, target)
             
-            loss = nnl + kl / bs # batch size
+            loss = nnl * (1/args.t) + kl / bs # args.t: Cold posterior temperature
             
             optimizer.zero_grad()
             loss.backward()
@@ -85,8 +85,8 @@ def test_BNN(model, test_loader, mc_runs, bs, device):
     nnls = []
     kls = []
     with torch.no_grad():
-        pbar = tqdm(test_loader)
-        for data, target in pbar:
+        
+        for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             
             output_ = []
@@ -118,6 +118,7 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
     nnls = []
     correct = 0
     total = 0
+    best_loss = torch.inf
     for e in range(epoch):
         
         pbar = tqdm(enumerate(train_loader), total=len(train_loader), ncols=0)
@@ -146,6 +147,10 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
         writer.add_scalar('Test/accuracy', acc_test, e)
         writer.add_scalar('Test/loss/NNL', np.mean(nnls), e)
         
+        if best_loss > nnl_test:
+            best_loss = nnl_test
+            torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_model.pth'))
+            print(colored(f"Best model saved at epoch {e}", 'green'))
         
 def test_DNN(model, test_loader):
 
