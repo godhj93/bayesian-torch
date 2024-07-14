@@ -4,11 +4,11 @@ import numpy as np
 import torch.nn.functional as F
 import os 
 from termcolor import colored
-
+from bayesian_torch.models.dnn_to_bnn import get_kl_loss
     
-def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs, bs, device):
+def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs, bs, device, moped=False):
 
-    # model.to(device)
+    model.to(device)
     best_loss = torch.inf
     
     for e in range(epoch):
@@ -26,9 +26,15 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             kl_ = []
             
             for _ in range(mc_runs):
-                output, kl = model(data)
-                output_.append(output)
-                kl_.append(kl)
+                if not moped:
+                    output, kl = model(data)
+                    output_.append(output)
+                    kl_.append(kl)
+                else:
+                    output = model(data)
+                    kl = get_kl_loss(model)
+                    output_.append(output)
+                    kl_.append(kl)
                 
             output = torch.mean(torch.stack(output_), dim=0).to(device)
             kl = torch.mean(torch.stack(kl_), dim=0).mean().to(device)
@@ -52,7 +58,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
             pbar.set_description(colored(f"[Train] Epoch: {e}/{epoch}, Acc: {acc:.5f}, NNL: {np.mean(nnls):.5f} KL: {np.mean(kls):.5f}", 'blue'))
             
-        acc, nnl, kl = test_BNN(model, test_loader, mc_runs, bs, device)
+        acc, nnl, kl = test_BNN(model, test_loader, mc_runs, bs, device, moped)
         print(colored(f"[Test] Acc: {acc:.5f}, NNL: {nnl:.5f}, KL: {kl:.5f}", 'yellow'))
         
         # Tensorboard
@@ -78,7 +84,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
             print(colored(f"Best model saved at epoch {e}", 'green'))
 
-def test_BNN(model, test_loader, mc_runs, bs, device):
+def test_BNN(model, test_loader, mc_runs, bs, device, moped=False):
     model.eval()
     correct = 0
     total = 0
@@ -92,9 +98,16 @@ def test_BNN(model, test_loader, mc_runs, bs, device):
             output_ = []
             kl_ = []
             for _ in range(mc_runs):
-                output, kl = model(data)
-                output_.append(output)
-                kl_.append(kl)
+                if not moped:
+                    output, kl = model(data)
+                    output_.append(output)
+                    kl_.append(kl)
+                else:
+                    output = model(data)
+                    kl = get_kl_loss(model)
+                    output_.append(output)
+                    kl_.append(kl)
+                    
             output = torch.mean(torch.stack(output_), dim=0).to(device)
             kl = torch.mean(torch.stack(kl_), dim=0).mean().to(device)
 
