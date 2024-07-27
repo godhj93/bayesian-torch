@@ -13,7 +13,6 @@ import torch.distributed as dist
 import os 
     
 def main(args):
-    
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     if args.data == 'mnist':
@@ -70,12 +69,26 @@ def main(args):
     
     # Multi-GPU
     if torch.cuda.device_count() > 1 and args.multi_gpu:
-        local_rank = int(os.environ.get('LOCAL_RANK'))
-        dist.init_process_group(backend='nccl')
-        rank = dist.get_rank()
-        world_size = dist.get_world_size()
+        import torch.distributed as dist
+        from torch.utils.data import DistributedSampler
+        
+        # DDP 초기화
+        local_rank = int(os.environ.get('LOCAL_RANK', 0))
+        dist.init_process_group(backend='nccl', init_method='env://')
+        
+        # Set device
+        torch.cuda.set_device(local_rank)
         device = torch.device(f'cuda:{local_rank}')
-        model = DDP(model.to(device), device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
+        
+        # DistributedSampler 설정
+        args.train_sampler = DistributedSampler(train_dataset)
+        args.test_sampler = DistributedSampler(test_dataset, shuffle=False)
+        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.bs, sampler=args.train_sampler, num_workers=4, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.bs, sampler=args.test_sampler, num_workers=4, pin_memory=True)
+        
+        # 모델을 DDP로 래핑
+        model = DDP(model.to(device), device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False)
+        
     else:
         model.to(device)
     
@@ -110,9 +123,11 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--bs', type=int, default=1024, help='Batch size')
     parser.add_argument('--model', type=str, default='multi', help='Model to train [dnn, uni, multi]')
-    parser.add_argument('--multi_gpu', type=bool, default=False, help='Use multi-gpu')
+    parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
     parser.add_argument('--t', type=float, default=1.0, help='Cold Posterior temperature')
     parser.add_argument('--data', type=str, default='mnist', help='Dataset to use [mnist, cifar]')
+    parser.add_argument('--train_sampler', type=bool, default=False, help='Do not use this argument')
     args = parser.parse_args()
+    
     print(colored(args, 'blue'))
     main(args)

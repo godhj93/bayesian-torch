@@ -56,6 +56,7 @@ class LeNet_BNN(nn.Module):
         x = F.relu(x)
         
         x = self.pool(x)
+        
         x = x.view(-1, 16*12*12)
         
         logit = self.fc1(x)
@@ -139,7 +140,6 @@ class ResNet_multivariate(nn.Module):
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
         out = self.linear(out)
-        print(colored(f"Linear layer is not variational", 'red'))
         kl_sum += kl
         return out, kl_sum
     

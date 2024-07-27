@@ -54,7 +54,7 @@ class BasicBlock(nn.Module):
             posterior_mu_init=posterior_mu_init,
             posterior_rho_init=posterior_rho_init,
             bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
+        self.bn1 = nn.SyncBatchNorm(planes)
         self.conv2 = Conv2dReparameterization(
             in_channels=planes,
             out_channels=planes,
@@ -66,7 +66,7 @@ class BasicBlock(nn.Module):
             posterior_mu_init=posterior_mu_init,
             posterior_rho_init=posterior_rho_init,
             bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.bn2 = nn.SyncBatchNorm(planes)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != planes:
@@ -88,7 +88,7 @@ class BasicBlock(nn.Module):
                         prior_variance=prior_sigma,
                         posterior_mu_init=posterior_mu_init,
                         posterior_rho_init=posterior_rho_init,
-                        bias=False), nn.BatchNorm2d(self.expansion * planes))
+                        bias=False), nn.SyncBatchNorm(self.expansion * planes))
 
     def forward(self, x):
         kl_sum = 0
@@ -120,7 +120,7 @@ class ResNet(nn.Module):
             posterior_mu_init=posterior_mu_init,
             posterior_rho_init=posterior_rho_init,
             bias=False)
-        self.bn1 = nn.BatchNorm2d(16)
+        self.bn1 = nn.SyncBatchNorm(16)
         self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
@@ -147,23 +147,24 @@ class ResNet(nn.Module):
     def forward(self, x):
         kl_sum = 0
         out, kl = self.conv1(x)
-        kl_sum += kl
+        kl_sum = kl_sum + kl
         out = self.bn1(out)
         out = F.relu(out)
         for l in self.layer1:
             out, kl = l(out)
-            kl_sum += kl
+            kl_sum = kl_sum + kl
         for l in self.layer2:
             out, kl = l(out)
-            kl_sum += kl
+            kl_sum = kl_sum + kl
         for l in self.layer3:
             out, kl = l(out)
-            kl_sum += kl
+            kl_sum = kl_sum + kl
 
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
         out, kl = self.linear(out)
-        kl_sum += kl
+        kl_sum = kl_sum + kl
+
         return out, kl_sum
 
 
