@@ -452,7 +452,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.posterior_mu_init = posterior_mu_init
         self.posterior_rho_init = posterior_rho_init
         self.bias = bias
-        self.epsilon = 1e-6
+        self.epsilon = 1e-5
 
         kernel_size = self.kernel_size
         weight_size = out_channels * (in_channels // groups) * kernel_size[0] * kernel_size[1]
@@ -475,7 +475,8 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         L_init = torch.tril(torch.rand(10,10))
         L = nn.Parameter(L_init)
         '''
-        self.L_param = Parameter(torch.tril(torch.Tensor(weight_size, weight_size)))
+        # self.L_param = Parameter(torch.tril(torch.Tensor(weight_size, weight_size)))
+        self.L_param = Parameter(torch.Tensor(1, weight_size))
         
         if self.bias:
             self.mu_bias = Parameter(torch.Tensor(out_channels))
