@@ -56,7 +56,6 @@ class LeNet_BNN(nn.Module):
         x = F.relu(x)
         
         x = self.pool(x)
-        
         x = x.view(-1, 16*12*12)
         
         logit = self.fc1(x)
@@ -90,25 +89,28 @@ class BasicBlock_multi(BasicBlock):
             kernel_size=3,
             stride=1,
             padding=1,
-            bias=False)
-        
+            bias=False)        
+    
 class ResNet_multivariate(nn.Module):
     
     def __init__(self, block, num_blocks, num_classes=10):
         super(ResNet_multivariate, self).__init__()
-        self.in_planes = 16
+        
+        div = 4
+        print(colored(f"in planes is reduced by {div} times since the computation is heavy", 'red'))
+        self.in_planes = 16//div # 16
         self.conv1 = Conv2dReparameterization_Multivariate(
             in_channels=3,
-            out_channels=16,
+            out_channels=16//div, # 16
             kernel_size=3,
             stride=1,
             padding=1,
             bias=False)
-        self.bn1 = nn.BatchNorm2d(16)
-        self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
-        self.linear = nn.Linear(64, num_classes)
+        self.bn1 = nn.BatchNorm2d(16//div) # 16
+        self.layer1 = self._make_layer(block, 16//div, num_blocks[0], stride=1) # 16
+        self.layer2 = self._make_layer(block, 32//div, num_blocks[1], stride=2) # 32
+        self.layer3 = self._make_layer(block, 64//div, num_blocks[2], stride=2) # 64
+        self.linear = nn.Linear(64//div, num_classes)
         print(colored(f"Linear layer is not variational", 'red'))
         
         # self.apply(_weights_init)
@@ -124,27 +126,57 @@ class ResNet_multivariate(nn.Module):
     def forward(self, x):
         kl_sum = 0
         out, kl = self.conv1(x)
+
         kl_sum += kl
         out = self.bn1(out)
         out = F.relu(out)
+
         for l in self.layer1:
             out, kl = l(out)
+    
             kl_sum += kl
+        
+
         for l in self.layer2:
             out, kl = l(out)
+    
             kl_sum += kl
+
         for l in self.layer3:
             out, kl = l(out)
+    
             kl_sum += kl
+
 
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
         out = self.linear(out)
+
         kl_sum += kl
         return out, kl_sum
     
+
 def resnet20_multi():
-    return ResNet_multivariate(BasicBlock_multi, [3, 3, 3]) 
+    return ResNet_multivariate(BasicBlock_multi, [3, 3, 3])
+
+
+def resnet32_multi():
+    return ResNet_multivariate(BasicBlock_multi, [5, 5, 5])
+
+
+def resnet44_multi():
+    return ResNet_multivariate(BasicBlock_multi, [7, 7, 7])
+
+
+def resnet56_multi():
+    return ResNet_multivariate(BasicBlock_multi, [9, 9, 9])
+
+
+def resnet110_multi():
+    return ResNet_multivariate(BasicBlock_multi, [18, 18, 18])
+
+
+
     
     
         

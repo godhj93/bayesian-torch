@@ -91,16 +91,22 @@ class BasicBlock(nn.Module):
                         bias=False), nn.SyncBatchNorm(self.expansion * planes))
 
     def forward(self, x):
+        
         kl_sum = 0
         out, kl = self.conv1(x)
+        
         kl_sum += kl
         out = self.bn1(out)
         out = F.relu(out)
         out, kl = self.conv2(out)
+        
+        
         kl_sum += kl
         out = self.bn2(out)
         out += self.shortcut(x)
+        
         out = F.relu(out)
+        
         return out, kl_sum
 
 
@@ -147,24 +153,23 @@ class ResNet(nn.Module):
     def forward(self, x):
         kl_sum = 0
         out, kl = self.conv1(x)
-        kl_sum = kl_sum + kl
+        kl_sum += kl
         out = self.bn1(out)
         out = F.relu(out)
         for l in self.layer1:
             out, kl = l(out)
-            kl_sum = kl_sum + kl
+            kl_sum += kl
         for l in self.layer2:
             out, kl = l(out)
-            kl_sum = kl_sum + kl
+            kl_sum += kl
         for l in self.layer3:
             out, kl = l(out)
-            kl_sum = kl_sum + kl
+            kl_sum += kl
 
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
         out, kl = self.linear(out)
-        kl_sum = kl_sum + kl
-
+        kl_sum += kl
         return out, kl_sum
 
 

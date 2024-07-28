@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
+from termcolor import colored
 
 __all__ = [
     'ResNet', 'resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet110',
@@ -42,19 +43,18 @@ class BasicBlock(nn.Module):
                                stride=stride,
                                padding=1,
                                bias=False)
-        # self.bn1 = nn.BatchNorm(planes)
-        self.bn1 = nn.SyncBatchNorm(planes)
-        self.relu1 = nn.ReLU(inplace=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.relu1 = nn.ReLU(inplace=True)
         self.conv2 = nn.Conv2d(planes,
                                planes,
                                kernel_size=3,
                                stride=1,
                                padding=1,
                                bias=False)
-        self.bn2 = nn.SyncBatchNorm(planes)
+        self.bn2 = nn.BatchNorm2d(planes)
         self.skip_add = nn.quantized.FloatFunctional()
         self.shortcut = nn.Sequential()
-        self.relu2 = nn.ReLU(inplace=False)
+        self.relu2 = nn.ReLU(inplace=True)
 
         if stride != 1 or in_planes != planes:
             if option == 'A':
@@ -68,7 +68,7 @@ class BasicBlock(nn.Module):
                               kernel_size=1,
                               stride=stride,
                               bias=False),
-                    nn.SyncBatchNorm(self.expansion * planes))
+                    nn.BatchNorm2d(self.expansion * planes))
 
     def forward(self, x):
         identity = self.shortcut(x)
@@ -79,7 +79,7 @@ class BasicBlock(nn.Module):
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.skip_add.add(out, identity)
-        # out = out + identity(x)
+        #out += self.shortcut(x)
         out = self.relu2(out)
         return out
         
@@ -87,20 +87,23 @@ class BasicBlock(nn.Module):
 class ResNet(nn.Module):
     def __init__(self, block, num_blocks, num_classes=10):
         super(ResNet, self).__init__()
-        self.in_planes = 16
+        
+        div = 4
+        print(colored(f"in planes is reduced by {div} times since the computation is heavy", 'red'))
+        self.in_planes = 16//div
 
         self.conv1 = nn.Conv2d(3,
-                               16,
+                               16//div,
                                kernel_size=3,
                                stride=1,
                                padding=1,
                                bias=False)
-        self.bn1 = nn.SyncBatchNorm(16)
-        self.relu1 = nn.ReLU(inplace=False)
-        self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
-        self.linear = nn.Linear(64, num_classes)
+        self.bn1 = nn.BatchNorm2d(16//div)
+        self.relu1 = nn.ReLU(inplace=True)
+        self.layer1 = self._make_layer(block, 16//div, num_blocks[0], stride=1)
+        self.layer2 = self._make_layer(block, 32//div, num_blocks[1], stride=2)
+        self.layer3 = self._make_layer(block, 64//div, num_blocks[2], stride=2)
+        self.linear = nn.Linear(64//div, num_classes)
 
         self.apply(_weights_init)
 

@@ -452,7 +452,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.posterior_mu_init = posterior_mu_init
         self.posterior_rho_init = posterior_rho_init
         self.bias = bias
-        self.epsilon = 1e-5
+        self.epsilon = 1.0
 
         kernel_size = self.kernel_size
         weight_size = out_channels * (in_channels // groups) * kernel_size[0] * kernel_size[1]
@@ -501,7 +501,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         # Initialize the L_param to form a lower triangular matrix that corresponds to the identity matrix
         # with torch.no_grad():
         #     self.L_param.copy_(torch.eye(self.L_param.size(0)))
-        self.L_param.data.normal_(mean=0.0, std=0.1)
+        self.L_param.data.normal_(mean=1.0, std=0.1)
         # print("L is initialized as: ", self.L_param.data)
         if self.bias:
             self.mu_bias.data.normal_(mean=self.posterior_mu_init, std=0.1)

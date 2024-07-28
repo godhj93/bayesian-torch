@@ -5,6 +5,20 @@ import torch.nn.functional as F
 import os 
 from termcolor import colored
 from bayesian_torch.models.dnn_to_bnn import get_kl_loss
+
+# Models
+from models import SimpleCNN, SimpleCNN_uni, SimpleCNN_multi, LeNet5, LeNet5_uni, LeNet5_multi, VGG7, VGG7_uni, VGG7_multi, resnet20_multi
+from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
+from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
+
+# Dataset
+from torchvision import datasets, transforms
+
+# Distirbuted Data Parallel
+from torch.nn.parallel import DistributedDataParallel as DDP
+import os 
+import torch.distributed as dist
+from torch.utils.data import DistributedSampler
     
 def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs, bs, device, moped=False):
 
@@ -186,3 +200,127 @@ def test_DNN(model, test_loader):
             nlls.append(loss.item())
     return correct / total, np.mean(nlls)
 
+
+def get_model(args):
+    
+    if args.type == 'dnn':
+        
+        if args.model == 'simple':
+            model = SimpleCNN()
+            
+        elif args.model == 'lenet':
+            model = LeNet5()
+            
+        elif args.model == 'vgg7':
+            model = VGG7()
+            
+        elif args.model == 'resnet20':
+            model = resnet20_deterministic()
+            
+        else:
+            raise ValueError('Model not found')
+        
+    elif args.type == 'uni':
+        
+        if args.model == 'simple':
+            model = SimpleCNN_uni()
+            
+        elif args.model == 'lenet':
+            model = LeNet5_uni()
+            
+        elif args.model == 'vgg7':
+            model = VGG7_uni()
+            
+        elif args.model == 'resnet20':
+            model = resnet20_uni()
+            
+        else:
+            raise ValueError('Model not found')
+    
+    elif args.type == 'multi':
+        
+        if args.model == 'simple':
+            model = SimpleCNN_multi()
+            
+        elif args.model == 'lenet':
+            model = LeNet5_multi()
+            
+        elif args.model == 'vgg7':
+            model = VGG7_multi()
+            
+        elif args.model == 'resnet20':
+            model = resnet20_multi()
+            
+        else:
+            raise ValueError('Model not found')
+    
+    # Check the number of parameters
+    print(f"Total number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+    
+    if torch.cuda.device_count() > 1 and args.multi_gpu:      
+        device = 'cuda'  
+        # DDP 초기화
+        local_rank = int(os.environ.get('LOCAL_RANK', 0))
+        dist.init_process_group(backend='nccl', init_method='env://')
+        
+        # Set device
+        torch.cuda.set_device(local_rank)
+        device = torch.device(f'cuda:{local_rank}')
+        
+        # 모델을 DDP로 래핑
+        model = DDP(model.to(device), device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False)
+        print(colored(f"Model is wrapped by DDP", 'red'))
+    
+    return model
+
+def get_dataset(args):
+    
+    if args.data == 'mnist':
+       
+        # MNIST dataset
+        train_dataset = datasets.MNIST(root='./data/', train=True, transform=transforms.ToTensor(), download=True)
+        test_dataset = datasets.MNIST(root='./data/', train=False, transform=transforms.ToTensor())
+        
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
+    
+    elif args.data == 'cifar':
+        
+        # Simple data augmentation
+        transform_train = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ])
+        transoform_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ])
+        # CIFAR dataset
+        train_dataset = datasets.CIFAR10(root='./data/', train=True, transform=transform_train, download=True)
+        test_dataset = datasets.CIFAR10(root='./data/', train=False, transform=transoform_test)
+        
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
+    
+    if torch.cuda.device_count() > 1 and args.multi_gpu:
+        
+        # DDP 초기화
+        local_rank = int(os.environ.get('LOCAL_RANK', 0))
+        dist.init_process_group(backend='nccl', init_method='env://')
+        
+        # Set device
+        torch.cuda.set_device(local_rank)
+        device = torch.device(f'cuda:{local_rank}')
+        
+        # DistributedSampler 설정
+        args.train_sampler = DistributedSampler(train_dataset)
+        args.test_sampler = DistributedSampler(test_dataset, shuffle=False)
+        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.bs, sampler=args.train_sampler, num_workers=4, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.bs, sampler=args.test_sampler, num_workers=4, pin_memory=True)
+        print(colored(f"Data is wrapped by DistributedSampler", 'red'))
+        
+    return train_loader, test_loader
+    
+    
