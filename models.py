@@ -16,7 +16,7 @@ class SimpleCNN(nn.Module):
         self.conv1 = nn.Conv2d(1, 6, 3, 1)
         self.conv2 = nn.Conv2d(6, 16, 3, 1)
         self.pool = nn.AvgPool2d(2, 2)
-        self.fc1 = nn.Linear(16*12*12, 10)
+        self.fc1 = nn.Linear(16*14*14, 10)
         
     def forward(self, x):
         
@@ -28,7 +28,7 @@ class SimpleCNN(nn.Module):
         
         x = self.pool(x)
         
-        x = x.view(-1, 16*12*12)
+        x = x.view(-1, 16*14*14)
         
         logit = self.fc1(x)
         
