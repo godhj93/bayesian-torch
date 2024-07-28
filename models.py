@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from bayesian_torch.models.bayesian.resnet_variational import BasicBlock
 from termcolor import colored
+from torchvision import transforms
 
 # prior_mu = 0.0
 # prior_sigma = 1.0
@@ -16,7 +17,7 @@ class SimpleCNN(nn.Module):
         self.conv1 = nn.Conv2d(1, 6, 3, 1)
         self.conv2 = nn.Conv2d(6, 16, 3, 1)
         self.pool = nn.AvgPool2d(2, 2)
-        self.fc1 = nn.Linear(16*14*14, 10)
+        self.fc1 = nn.Linear(16*12*12, 10)
         
     def forward(self, x):
         
@@ -28,7 +29,7 @@ class SimpleCNN(nn.Module):
         
         x = self.pool(x)
         
-        x = x.view(-1, 16*14*14)
+        x = x.view(-1, 16*12*12)
         
         logit = self.fc1(x)
         
@@ -41,7 +42,7 @@ class SimpleCNN_uni(SimpleCNN):
         self.conv1 = Conv2dReparameterization(1, 6, 3, 1)
         self.conv2 = Conv2dReparameterization(6, 16, 3, 1)
         self.pool = nn.AvgPool2d(2, 2)
-        self.fc1 = nn.Linear(16*14*14, 10)
+        self.fc1 = nn.Linear(16*12*12, 10)
         
     def forward(self, x):
         
@@ -57,7 +58,7 @@ class SimpleCNN_uni(SimpleCNN):
         
         x = self.pool(x)
         
-        x = x.view(-1, 16*14*14)
+        x = x.view(-1, 16*12*12)
         
         logit = self.fc1(x)
         
@@ -70,7 +71,7 @@ class SimpleCNN_multi(SimpleCNN_uni):
         self.conv1 = Conv2dReparameterization_Multivariate(1, 6, 3, 1)
         self.conv2 = Conv2dReparameterization_Multivariate(6, 16, 3, 1)
         self.pool = nn.AvgPool2d(2, 2)
-        self.fc1 = nn.Linear(16*14*14, 10)
+        self.fc1 = nn.Linear(16*12*12, 10)
 
 class LeNet5(nn.Module):
     
@@ -82,7 +83,10 @@ class LeNet5(nn.Module):
         self.fc1 = nn.Linear(120, 84)
         self.fc2 = nn.Linear(84, 10)
         
+        self.resize = transforms.Resize((32, 32))
+        
     def forward(self, x):
+        x = self.resize(x)
         # x: 1x32x32
         x = self.conv1(x)
         # x: 6x28x28
@@ -118,8 +122,13 @@ class LeNet5_uni(LeNet5):
             self.conv3 = Conv2dReparameterization(16, 120, 5, 1)
             self.fc1 = nn.Linear(120, 84)
             self.fc2 = nn.Linear(84, 10)
-            
+
+            self.resize = transforms.Resize((32, 32))
+
         def forward(self, x):
+            
+            x = self.resize(x)
+            
             kl_sum = 0
             
             x, kl = self.conv1(x)

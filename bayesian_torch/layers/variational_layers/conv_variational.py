@@ -476,7 +476,8 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         # Register the lower triangular part of the matrix as a learnable parameter
 
         self.L_param = Parameter(torch.Tensor(weight_size, 1))
-        self.B_param = torch.ones(weight_size) * 1e-10
+        self.B_param = torch.ones(weight_size) * 1e-6
+        # self.B_param = Parameter(torch.Tensor(weight_size))
         
         if self.bias:
             self.mu_bias = Parameter(torch.Tensor(out_channels))
@@ -497,7 +498,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
     def init_parameters(self):
         self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
  
-        self.L_param.data.normal_(mean=0, std=0.1)
+        self.L_param.data.normal_(mean=0, std=1)
         # self.B_param.data.normal_(mean=1, std=0.1)
         
         if self.bias:

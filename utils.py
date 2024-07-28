@@ -166,7 +166,7 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             correct += (predicted == target).sum().item()
             total += target.size(0)
             acc_train = correct / total
-            pbar.set_description(colored(f"[Train] Epoch: {e}/{epoch}, Acc: {acc_train:.3f}, NLL: {np.mean(nlls):.3f}", 'blue'))
+            pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc_train:.3f}, NLL: {np.mean(nlls):.3f}", 'blue'))
         
         acc_test, nll_test = test_DNN(model, test_loader)
         
@@ -180,7 +180,7 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
         if best_loss > nll_test:
             best_loss = nll_test
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_model.pth'))
-            print(colored(f"Best model saved at epoch {e}", 'green'))
+            print(colored(f"Best model saved at epoch {e+1}", 'green'))
         
 def test_DNN(model, test_loader):
 
@@ -201,8 +201,12 @@ def test_DNN(model, test_loader):
     return correct / total, np.mean(nlls)
 
 
-def get_model(args):
+def get_model(args, distill=False):
     
+    if distill:
+        args.type = 'dnn'
+        print(colored(f"Distillation mode is on", 'red'))
+        
     if args.type == 'dnn':
         
         if args.model == 'simple':
@@ -271,6 +275,9 @@ def get_model(args):
         model = DDP(model.to(device), device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False)
         print(colored(f"Model is wrapped by DDP", 'red'))
     
+    if args.distill:
+        args.type = 'multi'
+    
     return model
 
 def get_dataset(args):
@@ -279,15 +286,15 @@ def get_dataset(args):
        
         # Simple data augmentation 
         trasform_train = transforms.Compose([
-            transforms.Resize((32, 32)),
-            transforms.RandomHorizontalFlip(),
+            # transforms.Resize((32, 32)),
+            # transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,))
+            # transforms.Normalize((0.1307,), (0.3081,))
         ])
         transform_test = transforms.Compose([
-            transforms.Resize((32, 32)),
+            # transforms.Resize((32, 32)),
             transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,))
+            # transforms.Normalize((0.1307,), (0.3081,))
         ])
         
         train_dataset = datasets.MNIST(root='./data/', train=True, transform=trasform_train, download=True)
