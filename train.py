@@ -45,7 +45,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train')
-    parser.add_argument('--mc_runs', type=int, default=100, help='Number of Monte Carlo runs')
+    parser.add_argument('--mc_runs', type=int, default=30, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--bs', type=int, default=1024, help='Batch size')
     parser.add_argument('--model', type=str, default='simple', help='Model to train [simple, lenet, vgg7, resnet20]')

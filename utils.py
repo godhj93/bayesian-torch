@@ -277,9 +277,21 @@ def get_dataset(args):
     
     if args.data == 'mnist':
        
-        # MNIST dataset
-        train_dataset = datasets.MNIST(root='./data/', train=True, transform=transforms.ToTensor(), download=True)
-        test_dataset = datasets.MNIST(root='./data/', train=False, transform=transforms.ToTensor())
+        # Simple data augmentation 
+        trasform_train = transforms.Compose([
+            transforms.Resize((32, 32)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        transform_test = transforms.Compose([
+            transforms.Resize((32, 32)),
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        
+        train_dataset = datasets.MNIST(root='./data/', train=True, transform=trasform_train, download=True)
+        test_dataset = datasets.MNIST(root='./data/', train=False, transform=transform_test)
         
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)

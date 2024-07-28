@@ -51,6 +51,8 @@ import math
 from torch.quantization.observer import HistogramObserver, PerChannelMinMaxObserver, MinMaxObserver
 from torch.quantization.qconfig import QConfig
 from torch.distributions.multivariate_normal import MultivariateNormal
+from torch.distributions import LowRankMultivariateNormal, kl_divergence
+from termcolor import colored
 
 __all__ = [
     'Conv1dReparameterization',
@@ -452,7 +454,6 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.posterior_mu_init = posterior_mu_init
         self.posterior_rho_init = posterior_rho_init
         self.bias = bias
-        self.epsilon = 1.0
 
         kernel_size = self.kernel_size
         weight_size = out_channels * (in_channels // groups) * kernel_size[0] * kernel_size[1]
@@ -463,20 +464,19 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
             self.prior_mean = prior_mean.view(-1)
             
         if self.prior_variance is None:
-            self.prior_variance = torch.eye(weight_size) 
+            self.prior_cov_L = torch.zeros((weight_size, 1))
+            self.prior_cov_B = torch.ones(weight_size)
         else:
-            self.prior_variance = self.get_covariance_matrix(prior_variance)
+            # self.prior_variance = self.get_covariance_matrix(prior_variance)
+            self.prior_cov_L, self.prior_cov_B = self.prior_variance
         
         self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))
         # self.rho_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))
         
         # Register the lower triangular part of the matrix as a learnable parameter
-        '''
-        L_init = torch.tril(torch.rand(10,10))
-        L = nn.Parameter(L_init)
-        '''
-        # self.L_param = Parameter(torch.tril(torch.Tensor(weight_size, weight_size)))
-        self.L_param = Parameter(torch.Tensor(1, weight_size))
+
+        self.L_param = Parameter(torch.Tensor(weight_size, 1))
+        self.B_param = torch.ones(weight_size) * 1e-10
         
         if self.bias:
             self.mu_bias = Parameter(torch.Tensor(out_channels))
@@ -496,43 +496,40 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
 
     def init_parameters(self):
         self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
-        # self.rho_kernel.data.normal_(mean=self.posterior_rho_init, std=0.1)
+ 
+        self.L_param.data.normal_(mean=0, std=0.1)
+        # self.B_param.data.normal_(mean=1, std=0.1)
         
-        # Initialize the L_param to form a lower triangular matrix that corresponds to the identity matrix
-        # with torch.no_grad():
-        #     self.L_param.copy_(torch.eye(self.L_param.size(0)))
-        self.L_param.data.normal_(mean=1.0, std=0.1)
-        # print("L is initialized as: ", self.L_param.data)
         if self.bias:
             self.mu_bias.data.normal_(mean=self.posterior_mu_init, std=0.1)
             self.rho_bias.data.normal_(mean=self.posterior_rho_init, std=0.1)
 
-    def get_covariance_matrix(self):        
+    def get_covariance_param(self):        
         '''
-        L is a lower triangular matrix that is used to parameterize the covariance matrix
+        L: covariance factor
+        B: diagonal factor
         '''
-        covariance_matrix = self.L_param.T @ self.L_param
-        # Normalize the covariance matrix
-        covariance_matrix = covariance_matrix / torch.max(torch.abs(covariance_matrix))
-        # Check if the covariance matrix is positive definite
-        # if not torch.all(torch.linalg.eigvalsh(covariance_matrix) >= 0):
-        #     print("Covariance matrix is not positive definite")
-
-        return covariance_matrix
+        # print(colored(f"L shape: {self.L_param.shape}", 'red'))
+        return self.L_param, self.B_param.to(self.L_param.device)
 
     def forward(self, input, return_kl=True):
         weight_shape = self.mu_kernel.shape
 
         mu_flat = self.mu_kernel.view(-1)
-        cov_flat = self.get_covariance_matrix() + (self.epsilon * torch.eye(mu_flat.size(0))).to(mu_flat.device)
+        L, B = self.get_covariance_param()# + (self.epsilon * torch.eye(mu_flat.size(0))).to(mu_flat.device)
 
         # Use MultivariateNormal for sampling
-        mvn = MultivariateNormal(mu_flat, covariance_matrix=cov_flat)
+        mvn = LowRankMultivariateNormal(mu_flat, L, B)
         weight_flat = mvn.rsample() # Reparameterization trick
         weight = weight_flat.view(weight_shape)
-
+        
         if return_kl:
-            kl_weight = self.kl_div_multivariate_gaussian(mu_flat, cov_flat, self.prior_mean, self.prior_variance)
+            
+            # prior_mvn = MultivariateNormal(self.prior_mean.to(mu_flat.device), self.prior_variance.to(mu_flat.device))
+            prior_mvn = LowRankMultivariateNormal(self.prior_mean.to(mu_flat.device), self.prior_cov_L.to(mu_flat.device), self.prior_cov_B.to(mu_flat.device))
+
+            # kl_weight = self.kl_div_multivariate_gaussian(mu_flat, cov_flat, self.prior_mean, self.prior_variance)
+            kl_weight = kl_divergence(mvn, prior_mvn)
 
         bias = None
         if self.bias:
