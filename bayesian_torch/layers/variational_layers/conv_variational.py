@@ -465,10 +465,10 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
             
         if self.prior_variance is None:
             self.prior_cov_L = torch.zeros((weight_size, 1))
-            self.prior_cov_B = torch.ones(weight_size)
+            self.prior_cov_B = torch.ones(weight_size) 
         else:
-            # self.prior_variance = self.get_covariance_matrix(prior_variance)
-            self.prior_cov_L, self.prior_cov_B = self.prior_variance
+            raise NotImplementedError("Prior variance should be None")
+            # self.prior_cov_L, self.prior_cov_B = self.prior_variance
         
         self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))
         # self.rho_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))
@@ -476,7 +476,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         # Register the lower triangular part of the matrix as a learnable parameter
 
         self.L_param = Parameter(torch.Tensor(weight_size, 1))
-        self.B_param = torch.ones(weight_size) * 1e-6
+        self.logB_param = Parameter(torch.Tensor(weight_size))
         # self.B_param = Parameter(torch.Tensor(weight_size))
         
         if self.bias:
@@ -498,8 +498,8 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
     def init_parameters(self):
         self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
  
-        self.L_param.data.normal_(mean=0, std=1)
-        # self.B_param.data.normal_(mean=1, std=0.1)
+        self.L_param.data.normal_(mean=0, std=0.1)
+        self.logB_param.data.normal_(mean=0, std=0.1)
         
         if self.bias:
             self.mu_bias.data.normal_(mean=self.posterior_mu_init, std=0.1)
@@ -510,8 +510,8 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         L: covariance factor
         B: diagonal factor
         '''
-        # print(colored(f"L shape: {self.L_param.shape}", 'red'))
-        return self.L_param, self.B_param.to(self.L_param.device)
+        
+        return self.L_param, self.logB_param.exp().to(self.L_param.device)
 
     def forward(self, input, return_kl=True):
         weight_shape = self.mu_kernel.shape

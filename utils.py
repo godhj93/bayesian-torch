@@ -10,7 +10,7 @@ from bayesian_torch.models.dnn_to_bnn import get_kl_loss
 from models import SimpleCNN, SimpleCNN_uni, SimpleCNN_multi, LeNet5, LeNet5_uni, LeNet5_multi, VGG7, VGG7_uni, VGG7_multi, resnet20_multi
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
-
+from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
 # Dataset
 from torchvision import datasets, transforms
 
@@ -20,7 +20,7 @@ import os
 import torch.distributed as dist
 from torch.utils.data import DistributedSampler
     
-def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs, bs, device, moped=False):
+def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs, bs, device):
 
     model.to(device)
     best_loss = torch.inf
@@ -43,7 +43,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             kls = []
             
             for _ in range(mc_runs):
-                if not moped:
+                if not args.moped:
                     output, kl = model(data)
                     outputs.append(output)
                     kls.append(kl)
@@ -73,9 +73,9 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             correct += (predicted == target).sum().item()
             acc = correct / total            
             
-            pbar.set_description(colored(f"[Train] Epoch: {e}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):.5f}", 'blue'))
+            pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):.5f}", 'blue'))
             
-        acc, nll, kl = test_BNN(model, test_loader, mc_runs, bs, device, moped)
+        acc, nll, kl = test_BNN(model, test_loader, mc_runs, bs, device, args.moped)
         print(colored(f"[Test] Acc: {acc:.5f}, NLL: {nll:.5f}, KL: {kl:.5f}", 'yellow'))
         
         # Tensorboard
@@ -258,6 +258,23 @@ def get_model(args, distill=False):
         else:
             raise ValueError('Model not found')
     
+    if args.moped:
+        const_bnn_prior_parameters = {
+        "prior_mu": 0.0,
+        "prior_sigma": 1.0,
+        "posterior_mu_init": 0.0,
+        "posterior_rho_init": -3.0,
+        "type": "Reparameterization",  # Flipout or Reparameterization
+        "moped_enable": True,  # initialize mu/sigma from the dnn weights
+        "moped_delta": 0.2,
+        }
+        
+        model.load_state_dict(torch.load(args.weight))
+        dnn_to_bnn(model, const_bnn_prior_parameters)
+        
+        args.type = 'uni'
+        print(colored(f"MOPED is on", 'red'))
+        
     # Check the number of parameters
     print(f"Total number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
     
@@ -277,6 +294,8 @@ def get_model(args, distill=False):
     
     if args.distill:
         args.type = 'multi'
+        
+        
     
     return model
 
