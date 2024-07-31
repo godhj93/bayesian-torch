@@ -4,11 +4,7 @@ import torch.nn.functional as F
 from bayesian_torch.models.bayesian.resnet_variational import BasicBlock
 from termcolor import colored
 from torchvision import transforms
-
-# prior_mu = 0.0
-# prior_sigma = 1.0
-# posterior_mu_init = 0.0
-# posterior_rho_init = -3.0
+import torch
 
 class SimpleCNN(nn.Module):
     
@@ -86,7 +82,8 @@ class LeNet5(nn.Module):
         self.resize = transforms.Resize((32, 32))
         
     def forward(self, x):
-        x = self.resize(x)
+        with torch.no_grad():
+            x = self.resize(x)
         # x: 1x32x32
         x = self.conv1(x)
         # x: 6x28x28
@@ -102,7 +99,7 @@ class LeNet5(nn.Module):
         x = self.conv3(x)
         # x: 120x1x1
         x = F.tanh(x)
-        print(x.shape)
+        # print(x.shape)
 
         x = x.view(-1, 120)
         
@@ -127,7 +124,8 @@ class LeNet5_uni(LeNet5):
 
         def forward(self, x):
             
-            x = self.resize(x)
+            with torch.no_grad():
+                x = self.resize(x)
             
             kl_sum = 0
             
