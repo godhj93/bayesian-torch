@@ -470,13 +470,9 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
             raise NotImplementedError("Prior variance should be None")
             # self.prior_cov_L, self.prior_cov_B = self.prior_variance
         
-        self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))
-        # self.rho_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))
-        
-        # Register the lower triangular part of the matrix as a learnable parameter
-
+        self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))        
         self.L_param = Parameter(torch.Tensor(weight_size, 1))
-        self.logB_param = Parameter(torch.Tensor(weight_size))
+        self.B = torch.ones(weight_size) * 1e-6
         # self.B_param = Parameter(torch.Tensor(weight_size))
         
         if self.bias:
@@ -496,14 +492,22 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.quant_prepare = False
 
     def init_parameters(self):
-        self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
- 
-        self.L_param.data.normal_(mean=0, std=0.1)
-        self.logB_param.data.normal_(mean=0, std=0.1)
+        # self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
+        # self.L_param.data.normal_(mean=0, std=1)
+        # self.logB_param.data.normal_(mean=0, std=0.01)
         
-        if self.bias:
-            self.mu_bias.data.normal_(mean=self.posterior_mu_init, std=0.1)
-            self.rho_bias.data.normal_(mean=self.posterior_rho_init, std=0.1)
+        # if self.bias:
+        #     self.mu_bias.data.normal_(mean=self.posterior_mu_init, std=0.1)
+        #     self.rho_bias.data.normal_(mean=self.posterior_rho_init, std=0.1)
+        nn.init.xavier_normal_(self.mu_kernel)
+        
+        fan_in = self.in_channels
+        fan_out = self.out_channels
+        variance_L = 2.0 / (fan_in + fan_out)
+        std_L = variance_L ** 0.5
+        
+        self.L_param.data.normal_(mean=0, std=std_L)
+        
 
     def get_covariance_param(self):        
         '''
@@ -511,7 +515,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         B: diagonal factor
         '''
         
-        return self.L_param, self.logB_param.exp().to(self.L_param.device)
+        return self.L_param, self.B.to(self.L_param.device)
 
     def forward(self, input, return_kl=True):
         weight_shape = self.mu_kernel.shape
@@ -519,6 +523,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         mu_flat = self.mu_kernel.view(-1)
         L, B = self.get_covariance_param()# + (self.epsilon * torch.eye(mu_flat.size(0))).to(mu_flat.device)
 
+        
         # Use MultivariateNormal for sampling
         mvn = LowRankMultivariateNormal(mu_flat, L, B)
         weight_flat = mvn.rsample() # Reparameterization trick
@@ -550,6 +555,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
             return out, kl
             
         return out
+    
 class Conv3dReparameterization(BaseVariationalLayer_):
     def __init__(self,
                  in_channels,
