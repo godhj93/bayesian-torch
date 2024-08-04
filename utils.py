@@ -24,6 +24,8 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
 
     model.to(device)
     best_loss = torch.inf
+    best_nll = torch.inf
+    best_acc = 0
     
     for e in range(epoch):
         if args.train_sampler:
@@ -100,6 +102,16 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_model.pth'))    
             
             print(colored(f"Best model saved at epoch {e}", 'green'))
+            
+        if best_nll > nll:
+            best_nll = nll
+            torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_nll_model.pth'))
+            print(colored(f"Best NLL model saved at epoch {e}", 'green'))
+            
+        if best_acc < acc:
+            best_acc = acc
+            torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_acc_model.pth'))
+            print(colored(f"Best ACC model saved at epoch {e}", 'green'))
 
 def test_BNN(model, test_loader, mc_runs, bs, device, moped=False):
     model.eval()
