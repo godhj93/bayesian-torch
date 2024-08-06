@@ -88,7 +88,7 @@ class ResNet(nn.Module):
     def __init__(self, block, num_blocks, num_classes=10):
         super(ResNet, self).__init__()
         
-        div = 4
+        div = 1
         print(colored(f"in planes is reduced by {div} times since the computation is heavy", 'red'))
         self.in_planes = 16//div
 
