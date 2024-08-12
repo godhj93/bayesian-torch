@@ -65,7 +65,9 @@ def distill(dnn, bnn, steps, writer, device = 'cuda'):
     for dnn_layer, bnn_good_prior_layer in zip(dnn_linear_layers, bnn_good_prior_linear_layers):
         
         # Set the prior
-        bnn_good_prior_layer = dnn_layer
+        bnn_good_prior_layer = dnn_layer.clone()
+        print(colored(f"Linear weight copied from DNN to BNN", 'red'))
+        
         
     return bnn_good_prior
   
