@@ -6,8 +6,9 @@ import torch.nn as nn
 from bayesian_torch.layers.variational_layers.conv_variational import Conv2dReparameterization, Conv2dReparameterization_Multivariate
 import numpy as np
 import copy 
+from torch.nn import functional as F
 
-def distill(dnn, bnn, steps, writer, device = 'cuda'):
+def distill(dnn, bnn, steps, writer, alpha, device = 'cuda'):
     
     bnn_good_prior = copy.deepcopy(bnn)
     
@@ -36,13 +37,14 @@ def distill(dnn, bnn, steps, writer, device = 'cuda'):
             # Check var is on the same device 
             w_sample = LowRankMultivariateNormal(mu_flat, L, B).rsample().reshape(w_dnn.size())
             
-            loss += (w_dnn - w_sample).pow(2).mean()
+            
+            loss += MSE(w_sample, w_dnn)  +  alpha / L.norm(p=1)
             
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
             
-        pbar.set_description(f"Distillation Loss: {loss.item():.2f}")
+        pbar.set_description(f"Distillation Loss: {loss.item():.2f}, alpha: {alpha:.2f}")
             
         writer.add_scalar('Distillation Loss', loss.item(), idx)
             
@@ -55,17 +57,19 @@ def distill(dnn, bnn, steps, writer, device = 'cuda'):
         
         # Set the prior
         bnn_good_prior_layer.prior_mean = bnn_layer.mu_kernel.detach().clone().flatten()
+        # print(colored(f"Disabled copying of prior mean", 'red'))
         bnn_good_prior_layer.prior_cov_L = bnn_layer.get_covariance_param()[0].detach()
         bnn_good_prior_layer.prior_cov_B = bnn_layer.get_covariance_param()[1].detach()
-        # bnn_good_prior_layer.prior_variance = bnn_layer.get_covariance_param()
         
         # Set the variational parameters
-        bnn_good_prior_layer.mu_kernel = bnn_layer.mu_kernel
+        # bnn_good_prior_layer.mu_kernel = bnn_layer.mu_kernel
+        # bnn_good_prior_layer.L_param.data = bnn_layer.get_covariance_param()[0].detach().clone()
+        # bnn_good_prior_layer.B.data = bnn_layer.get_covariance_param()[1].detach().clone()
         
     for dnn_layer, bnn_good_prior_layer in zip(dnn_linear_layers, bnn_good_prior_linear_layers):
         
         # Set the prior
-        bnn_good_prior_layer = dnn_layer.clone()
+        bnn_good_prior_layer.weight.data = dnn_layer.weight.data.clone()
         print(colored(f"Linear weight copied from DNN to BNN", 'red'))
         
         
