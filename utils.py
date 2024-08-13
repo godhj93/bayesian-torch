@@ -75,10 +75,10 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             correct += (predicted == target).sum().item()
             acc = correct / total            
             
-            pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):.5f}", 'blue'))
+            pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):,}", 'blue'))
             
         acc, nll, kl = test_BNN(model, test_loader, mc_runs, bs, device, args.moped)
-        print(colored(f"[Test] Acc: {acc:.5f}, NLL: {nll:.5f}, KL: {kl:.5f}", 'yellow'))
+        print(colored(f"[Test] Acc: {acc:.5f}, NLL: {nll:.5f}, KL: {kl:,}", 'yellow'))
         
         # Tensorboard
         writer.add_scalar('Train/accuracy', acc, e)
