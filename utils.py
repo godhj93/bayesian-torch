@@ -317,7 +317,7 @@ def get_dataset(args):
        
         # Simple data augmentation 
         trasform_train = transforms.Compose([
-            # transforms.RandomCrop(28, padding=4),
+            transforms.RandomCrop(28, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.RandomVerticalFlip(),
             transforms.ToTensor(),
