@@ -472,7 +472,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         
         self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))        
         self.L_param = Parameter(torch.Tensor(weight_size, 1))
-        self.B = torch.ones(weight_size) * 1e-2
+        self.B = torch.ones(weight_size) * 1e-3
         # self.B_param = Parameter(torch.Tensor(weight_size))
         
         if self.bias:
