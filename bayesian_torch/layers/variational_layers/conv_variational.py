@@ -472,8 +472,8 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         
         self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))        
         self.L_param = Parameter(torch.Tensor(weight_size, 1))
-        self.B = torch.ones(weight_size) * 1e-3
-        # self.B_param = Parameter(torch.Tensor(weight_size))
+        # self.B = Parameter(torch.Tensor(1))
+        self.B_param = Parameter(torch.Tensor(weight_size)) * 1e-3
         
         if self.bias:
             self.mu_bias = Parameter(torch.Tensor(out_channels))
@@ -492,30 +492,32 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.quant_prepare = False
 
     def init_parameters(self):
-        # self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
-        # self.L_param.data.normal_(mean=0, std=1)
+        self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
+        self.L_param.data.normal_(mean=0, std=torch.tensor(0.0485).sqrt())
+        # self.B.data.fill_(1.0)
         # self.logB_param.data.normal_(mean=0, std=0.01)
         
         # if self.bias:
         #     self.mu_bias.data.normal_(mean=self.posterior_mu_init, std=0.1)
         #     self.rho_bias.data.normal_(mean=self.posterior_rho_init, std=0.1)
         
-        nn.init.xavier_normal_(self.mu_kernel)
+        # nn.init.xavier_normal_(self.mu_kernel)
         
-        fan_in = self.in_channels
-        fan_out = self.out_channels
-        variance_L = 2.0 / (fan_in + fan_out)
-        std_L = variance_L ** 0.5
+        # fan_in = self.in_channels
+        # fan_out = self.out_channels
+        # variance_L = 2.0 / (fan_in + fan_out)
+        # std_L = variance_L ** 0.5
         
-        self.L_param.data.normal_(mean=0, std=std_L)
+        # self.L_param.data.normal_(mean=0, std=std_L)
 
+        # self.B.data.fill_(1.0)
     def get_covariance_param(self):        
         '''
         L: covariance factor
         B: diagonal factor
         '''
-        
-        return self.L_param, self.B.to(self.L_param.device)
+        # print((self.B.to(self.L_param.device) * torch.ones_like(self.L_param)).shape)
+        return self.L_param, self.B.to(self.L_param.device) * torch.ones_like(self.L_param).squeeze()
 
     def forward(self, input, return_kl=True):
         weight_shape = self.mu_kernel.shape
