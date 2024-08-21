@@ -152,7 +152,7 @@ def test_BNN(model, test_loader, mc_runs, bs, device, moped=False):
             
     return correct / total, np.mean(nll_total), np.mean(kl_total)
 
-def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer):
+def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer, args):
     
     
     model.to(device)    
@@ -178,11 +178,13 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             correct += (predicted == target).sum().item()
             total += target.size(0)
             acc_train = correct / total
-            pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc_train:.3f}, NLL: {np.mean(nlls):.3f}", 'blue'))
+            pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc_train:.3f}, NLL: {np.mean(nlls):.3f}, LR: {optimizer.param_groups[0]['lr']:.5f}", 'blue'))
         
         acc_test, nll_test = test_DNN(model, test_loader)
         
         print(colored(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}", 'yellow'))
+        
+        args.scheduler.step()
         
         writer.add_scalar('Train/accuracy', acc_train, e)
         writer.add_scalar('Train/loss/NLL', np.mean(nlls), e)

@@ -29,6 +29,9 @@ def main(args):
     # Optimizer
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
     
+    # Learning rate scheduler
+    args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[50, 75], gamma=0.1)
+    
     if args.type == 'dnn':
         train_DNN(epoch = args.epochs, 
                   model = model, 
@@ -36,7 +39,8 @@ def main(args):
                   test_loader = test_loader, 
                   optimizer = optim, 
                   writer = writer,
-                  device = device)
+                  device = device,
+                  args = args)
     else:
         train_BNN(epoch = args.epochs, 
                   model = model, 
