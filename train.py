@@ -30,7 +30,7 @@ def main(args):
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
     
     # Learning rate scheduler
-    args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[50, 75], gamma=0.1)
+    # args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[50, 75], gamma=0.1)
     
     if args.type == 'dnn':
         train_DNN(epoch = args.epochs, 

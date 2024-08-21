@@ -184,7 +184,7 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
         
         print(colored(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}", 'yellow'))
         
-        args.scheduler.step()
+        # args.scheduler.step()
         
         writer.add_scalar('Train/accuracy', acc_train, e)
         writer.add_scalar('Train/loss/NLL', np.mean(nlls), e)
