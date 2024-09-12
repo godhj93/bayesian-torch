@@ -6,6 +6,10 @@ from termcolor import colored
 import torch
 import torch.nn.functional as F
 import numpy as np
+from torchmetrics.classification import AveragePrecision
+from sklearn.metrics import roc_auc_score, roc_curve
+import matplotlib.pyplot as plt
+
 def main(args):
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -14,7 +18,11 @@ def main(args):
     model.load_state_dict(torch.load(args.weight))
     
     # Get the dataset
-    train_loader, test_loader = get_dataset(args)
+    _, test_loader = get_dataset(args)
+    args.data = 'tinyimagenet'
+    _, tiny_imagenet_loader = get_dataset(args)
+    # args.data = 'mnist'
+    # _, mnist_loader = get_dataset(args)
     
     if args.type == 'dnn':
         acc, nll = test_DNN(
@@ -36,28 +44,156 @@ def main(args):
         print(colored(f'Accuracy: {acc:.5f}, NLL: {nll:.5f}, ECE: {ece:.5f}', 'green'))
         
     else:
-        acc, nll, kl = test_BNN(
-            model = model,
-            test_loader = test_loader,
-            mc_runs = args.mc_runs,
-            bs = args.bs,
-            device = device   
-        )
+        # acc, nll, kl = test_BNN(
+        #     model = model,
+        #     test_loader = test_loader,
+        #     mc_runs = args.mc_runs,
+        #     bs = args.bs,
+        #     device = device   
+        # )
         
-        with torch.no_grad():
-            for i, (x, y) in enumerate(test_loader):
-                outputs = []
-                x, y = x.to(device), y.to(device)
-                for _ in range(args.mc_runs):
-                    logits, _ = model(x)
-                    outputs.append(logits)
+        # with torch.no_grad():
+        #     for i, (x, y) in enumerate(test_loader):
+        #         outputs = []
+        #         x, y = x.to(device), y.to(device)
+        #         for _ in range(args.mc_runs):
+        #             logits, _ = model(x)
+        #             outputs.append(logits)
                     
-                logits = torch.stack(outputs, dim=0).mean(dim=0)
-                ece = expected_calibration_error(logits, y, n_bins=15)
-                
-        print(colored(f'Accuracy: {acc:.5f}, NLL: {nll:.5f}, KL: {kl:.5f}, ECE: {ece:.5f}', 'green'))            
+        #         logits = torch.stack(outputs, dim=0).mean(dim=0)
+        #         ece = expected_calibration_error(logits, y, n_bins=15)
+        
+        # ece, auroc, aupr = ece_and_ood(test_loader, test_loader, model, device, args)
+        # print(colored(f'Accuracy: {acc:.5f}, NLL: {nll:.5f}, KL: {kl:.5f}, ECE: {ece:.5f}, AUROC: {auroc:.5f}, AUPR: {aupr:.5f}', 'green'))
+        
+        thresholds = np.linspace(0.1, 1.0, 99)
+        tpr = []  # True Positive Rate
+        fpr = []  # False Positive Rate
+        
+        
+        for thres in thresholds:
+            in_correct, out_correct = test_ood_detection(model, test_loader, tiny_imagenet_loader, thres)
+            
+            # TPR (In-distribution의 정확한 탐지 비율)
+            tpr.append(in_correct / len(test_loader.dataset))
+            
+            # FPR (Out-of-distribution의 잘못된 탐지 비율)
+            fpr.append(1 - (out_correct / len(tiny_imagenet_loader.dataset)))
+
+        fpr, tpr = zip(*sorted(zip(fpr, tpr)))
+
+        auroc = np.trapz(tpr, fpr)
+
+        # AUROC 커브 그리기
+        plt.plot(fpr, tpr, label=f'AUROC = {auroc:.2f}')
+        plt.xlabel('False Positive Rate (FPR)')
+        plt.ylabel('True Positive Rate (TPR)')
+        plt.title('AUROC Curve')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig('auroc_curve.png', dpi=300)
+
+# 테스트 함수 정의
+def test_ood_detection(model, in_loader, out_loader, threshold):
+    import torch.nn as nn
+    print(f'Threshold: {threshold}')
+    model.eval().cuda()
+    in_distribution_scores = []
+    out_distribution_scores = []
+
+    with torch.no_grad():
+        for images, _ in in_loader:
+            outputs, _ = model(images.cuda())
+            softmax_probs = nn.Softmax(dim=1)(outputs)
+            max_probs, _ = torch.max(softmax_probs, dim=1)
+            in_distribution_scores.extend(max_probs.cpu().numpy())
     
+    # OOD 데이터 생성 (예: Uniform Noise)
+    # ood_data = torch.rand((len(in_distribution_scores), 3, 32, 32))
+    with torch.no_grad():
+        for ood_data, _ in out_loader:
+            outputs, _ = model(ood_data.cuda())
+            softmax_probs = nn.Softmax(dim=1)(outputs)
+            max_probs, _ = torch.max(softmax_probs, dim=1)
+            out_distribution_scores.extend(max_probs.cpu().numpy())
+
+    # 결과 계산
+    in_distribution_scores = np.array(in_distribution_scores)
+    out_distribution_scores = np.array(out_distribution_scores)
+
+    # Threshold에 따라 OOD Detection
+    in_correct = np.sum(in_distribution_scores > threshold)
+    out_correct = np.sum(out_distribution_scores < threshold)
+
     
+    print(f'In-distribution samples correctly detected: {in_correct}/{len(in_distribution_scores)}')
+    print(f'Out-of-distribution samples correctly detected: {out_correct}/{len(out_distribution_scores)}')
+    return in_correct, out_correct
+
+def ece_and_ood(id_loader, ood_loader, model, device, args):
+    # ID와 OOD 데이터를 저장할 리스트
+    id_scores = []
+    ood_scores = []
+
+    # ID 데이터에 대한 예측 수행
+    with torch.no_grad():
+        for i, (x, y) in enumerate(id_loader):
+            outputs = []
+            x, y = x.to(device), y.to(device)
+            for _ in range(args.mc_runs):
+                logits, _ = model(x)
+                outputs.append(logits)
+
+            logits = torch.stack(outputs, dim=0).mean(dim=0)
+            # ECE 계산 (ID 데이터만 사용)
+            ece = expected_calibration_error(logits, y, n_bins=15)
+            # Softmax를 통해 최대 확률 값을 얻어 ID 점수로 사용
+            max_prob = torch.max(torch.softmax(logits, dim=1), dim=1).values
+            id_scores.extend(max_prob.cpu().tolist())
+
+    # OOD 데이터에 대한 예측 수행
+    with torch.no_grad():
+        for i, (x, _) in enumerate(ood_loader):  # OOD 데이터에서는 레이블 사용 안 함
+            outputs = []
+            x = x.to(device)
+            for _ in range(args.mc_runs):
+                logits, _ = model(x)
+                outputs.append(logits)
+
+            logits = torch.stack(outputs, dim=0).mean(dim=0)
+            # Softmax를 통해 최대 확률 값을 얻어 OOD 점수로 사용
+            max_prob = torch.max(torch.softmax(logits, dim=1), dim=1).values
+            ood_scores.extend(max_prob.cpu().tolist())
+
+    # ID와 OOD 점수 결합
+    scores = id_scores + ood_scores
+    labels = [0] * len(id_scores) + [1] * len(ood_scores)  # 0: ID, 1: OOD
+
+    # AUROC 계산
+    auroc = roc_auc_score(labels, scores)
+
+    # AUPR 계산 using torchmetrics
+    aupr_metric = AveragePrecision(task='binary')
+    scores_tensor = torch.tensor(scores)
+    labels_tensor = torch.tensor(labels)
+    aupr = aupr_metric(scores_tensor, labels_tensor).item()
+    
+    # ROC 곡선 계산 및 그리기
+    fpr, tpr, _ = roc_curve(labels, scores)
+
+    # ROC 곡선 그리기 및 저장
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, label=f'AUROC = {auroc:.4f}', color='blue')
+    plt.plot([0, 1], [0, 1], linestyle='--', color='gray', label='Random Chance')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC Curve')
+    plt.legend(loc='lower right')
+    plt.grid(True)
+    plt.savefig('roc_curve.png')
+    plt.close()
+
+    return ece, auroc, aupr
 
 def expected_calibration_error(logits, labels, n_bins=15) -> float:
     """
