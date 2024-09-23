@@ -16,7 +16,8 @@ def main(args):
     train_loader, test_loader = get_dataset(args)
 
     date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    log_path = 'runs/{}/{}/{}/bs{}_lr{}_mc{}_temp_{}_ep{}_kd_{}_martern_{}_alpha_{}_moped_{}_{}'.format(args.data, args.model, args.type, args.bs, args.lr, args.mc_runs, args.t, args.epochs, args.distill, args.martern, args.alpha, args.moped, date)
+    # log_path = 'runs/{}/{}/{}/bs{}_lr{}_mc{}_temp_{}_ep{}_kd_{}_martern_{}_alpha_{}_moped_{}_{}'.format(args.data, args.model, args.type, args.bs, args.lr, args.mc_runs, args.t, args.epochs, args.distill, args.martern, args.alpha, args.moped, date)
+    log_path = 'runs/{}/{}/{}/{}/bs{}_lr{}_mc{}_temp_{}_ep{}_kd_{}_martern_{}_alpha_{}_moped_{}_{}'.format(args.data, args.model, date.split('-')[0], args.type, args.bs, args.lr, args.mc_runs, args.t, args.epochs, args.distill, args.martern, args.alpha, args.moped, date)
     writer = SummaryWriter(log_path)
     
     if args.distill:
@@ -24,7 +25,7 @@ def main(args):
         dnn_model.load_state_dict(torch.load(args.weight))
         print(colored(f"Distilling from {args.weight}", 'green'))
         print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
-        model = distill(dnn_model, model, steps = 10000, alpha= args.alpha, device = device, writer = writer)
+        model = distill(dnn_model, model, steps = 5000, alpha= args.alpha, device = device, writer = writer)
         
     if args.martern:
         dnn_model = get_model(args, distill=True)

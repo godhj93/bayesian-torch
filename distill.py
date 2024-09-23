@@ -56,7 +56,7 @@ def distill(dnn, bnn, steps, writer, alpha, device = 'cuda'):
     
     for bnn_layer, bnn_good_prior_layer in zip(bnn_conv_layers, bnn_good_prior_conv_layers):
         
-        bnn_layer.distill = True
+        bnn_good_prior_layer.distill = True
         # Set the prior
         bnn_good_prior_layer.prior_mean = bnn_layer.mu_kernel.detach().clone().flatten()
         # print(colored(f"Disabled copying of prior mean", 'red'))

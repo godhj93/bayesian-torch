@@ -78,8 +78,8 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
             pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):,}", 'blue'))
             
-        acc, nll, kl = test_BNN(model, test_loader, mc_runs, bs, device, args.moped)
-        print(colored(f"[Test] Acc: {acc:.5f}, NLL: {nll:.5f}, KL: {kl:,}", 'yellow'))
+        acc_test, nll, kl = test_BNN(model, test_loader, mc_runs, bs, device, args.moped)
+        print(colored(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}", 'yellow'))
         
         # args.scheduler.step()
         # print(colored(f"Learning rate: {optimizer.param_groups[0]['lr']}", 'red'))
@@ -89,7 +89,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
         writer.add_scalar('Train/loss/KL', np.mean(kl_total), e)
         writer.add_scalar('Train/loss/total', np.mean(nll_total) + np.mean(kl_total), e)
 
-        writer.add_scalar('Test/accuracy', acc, e)
+        writer.add_scalar('Test/accuracy', acc_test, e)
         writer.add_scalar('Test/loss/NLL', nll, e)
         writer.add_scalar('Test/loss/KL', kl, e)
         writer.add_scalar('Test/loss/total', nll + kl, e)
