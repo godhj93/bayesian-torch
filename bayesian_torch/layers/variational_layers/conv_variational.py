@@ -53,6 +53,7 @@ from torch.quantization.qconfig import QConfig
 from torch.distributions.multivariate_normal import MultivariateNormal
 from torch.distributions import LowRankMultivariateNormal, kl_divergence
 from termcolor import colored
+import numpy as np
 
 __all__ = [
     'Conv1dReparameterization',
@@ -473,7 +474,11 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))        
         self.L_param = Parameter(torch.Tensor(weight_size, 1))
         # self.B = Parameter(torch.Tensor(1))
-        self.B = torch.ones(weight_size) * 1e-3
+        self.epsilon = 1e-3
+        self.B = torch.ones(weight_size) * self.epsilon
+        
+        # For Martern Prior
+        self.BLOCK_MAT = self.covariance_matrix_by_filter((self.mu_kernel.shape[-2:]), sigma=1.0, lamb=1.0)
         
         if self.bias:
             self.mu_bias = Parameter(torch.Tensor(out_channels))
@@ -490,6 +495,8 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
 
         self.init_parameters()
         self.quant_prepare = False
+        self.distill = False
+        self.matern_prior = False
 
     def init_parameters(self):
         self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
@@ -533,11 +540,12 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         
         if return_kl:
             
-            # prior_mvn = MultivariateNormal(self.prior_mean.to(mu_flat.device), self.prior_variance.to(mu_flat.device))
-            prior_mvn = LowRankMultivariateNormal(self.prior_mean.to(mu_flat.device), self.prior_cov_L.to(mu_flat.device), self.prior_cov_B.to(mu_flat.device))
-
-            # kl_weight = self.kl_div_multivariate_gaussian(mu_flat, cov_flat, self.prior_mean, self.prior_variance)
-            kl_weight = kl_divergence(mvn, prior_mvn)
+            if self.distill:
+                prior_mvn = LowRankMultivariateNormal(self.prior_mean.to(mu_flat.device), self.prior_cov_L.to(mu_flat.device), self.prior_cov_B.to(mu_flat.device))
+                kl_weight = kl_divergence(mvn, prior_mvn)
+            
+            if self.martern_prior:
+                kl_weight = self.kl_divergence_block_diagonal_and_low_rank(self.prior_mean.to(mu_flat.device), mu_flat, self.BLOCK_MAT, L, self.epsilon)
 
         bias = None
         if self.bias:
@@ -558,6 +566,163 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
             
         return out
     
+    def covariance_matrix_by_filter(self, filter_size, sigma=1.0, lamb=1.0):
+        """
+        고정된 필터 크기에 대해 공분산 행렬을 계산하는 함수.
+        """
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        # 필터 좌표 생성
+        coords = torch.tensor([(float(i), float(j)) for i in range(filter_size[0]) for j in range(filter_size[1])], device=device)
+        n = coords.shape[0]
+
+        # 좌표 간 거리 계산
+        diff = coords.unsqueeze(1) - coords.unsqueeze(0)  # 크기: [n, n, 2]
+        dist = torch.norm(diff, dim=2)  # 크기: [n, n]
+
+        # 공분산 계산
+        cov_matrix = (sigma ** 2) * torch.exp(-dist / lamb)  # 크기: [n, n]
+
+        return cov_matrix
+    
+    def kl_divergence_block_diagonal_and_low_rank(self, mu_p, mu_q, B, L, epsilon):
+        """
+        랭크 1의 q 분포와 블록 대각 공분산 행렬을 가진 p 분포 사이의 KL 발산 계산
+        """
+        # 모든 텐서가 동일한 디바이스에 있는지 확인
+        device = 'cuda'
+        assert device == 'cuda', 'Device should be cuda'
+        mu_p = mu_p.to(device)
+        mu_p = mu_p.to(device)
+        B = B.to(device)
+        L = L.to(device)
+
+        k = mu_p.shape[0]         # 전체 차원 수
+        m = B.shape[0]            # 블록의 크기
+        K = k // m                # 블록의 수
+
+        # epsilon을 텐서가 아닌 스칼라 값으로 사용
+        epsilon_tensor = torch.tensor(epsilon, device=device)
+
+        # 1. Sigma_q의 행렬식 계산
+        L_norm_sq = torch.sum(L ** 2)
+        log_det_Sigma_q = (k - 1) * torch.log(epsilon_tensor) + torch.log(epsilon + L_norm_sq)
+
+        # 2. Sigma_p의 행렬식 계산
+        sign_B, logdet_B = torch.slogdet(B)
+        log_det_Sigma_p = K * logdet_B
+
+        # 3. B의 역행렬 및 트레이스 계산
+        B_inv = torch.inverse(B)
+        tr_B_inv = torch.trace(B_inv)
+
+        # 4. L^T Sigma_p^{-1} L 계산 (벡터화)
+        L_reshaped = L.view(K, m)  # 크기: [K, m]
+        L_Sigma_p_inv_L = torch.sum((L_reshaped @ B_inv) * L_reshaped)
+
+        # 5. 트레이스 항목 계산
+        tr_term = L_Sigma_p_inv_L + epsilon * K * tr_B_inv
+
+        # 6. 마할라노비스 거리 계산 (벡터화)
+        delta_mu = mu_p - mu_q
+        delta_mu_reshaped = delta_mu.view(K, m)  # 크기: [K, m]
+        mahalanobis = torch.sum((delta_mu_reshaped @ B_inv) * delta_mu_reshaped)
+
+        # 7. KL 발산 계산
+        kl_div = 0.5 * (log_det_Sigma_p - log_det_Sigma_q - k + tr_term + mahalanobis)
+
+        return kl_div
+
+    # def covariance_matrix_by_filter(self, filter_size, sigma=1.0, lamb=1.0):
+    #     """
+    #     고정된 필터 크기에 대해 공분산 행렬을 계산하는 함수.
+        
+    #     Parameters:
+    #     filter_size: 필터의 (높이, 너비) 크기 (예: (3, 3) 등)
+    #     sigma: 공분산의 스케일링 값 (분산)
+    #     lamb: 거리 감소 파라미터 (length scale)
+        
+    #     Returns:
+    #     고정된 크기의 필터에 대한 공분산 행렬
+    #     """
+    #     # 필터 좌표 생성
+    #     coords = [(float(i), float(j)) for i in range(filter_size[0]) for j in range(filter_size[1])]
+    #     n = len(coords)
+    #     cov_matrix = np.zeros((n, n))
+        
+    #     # 두 좌표 사이의 거리를 기반으로 공분산 계산
+    #     for i in range(n):
+    #         for j in range(n):
+    #             # 두 좌표 간 거리 계산 (유클리드 거리 사용)
+    #             d = np.linalg.norm(np.array(coords[i]) - np.array(coords[j]))
+    #             # 공분산 계산
+    #             cov_matrix[i, j] = sigma**2 * np.exp(-d / lamb)
+        
+    #     return torch.tensor(cov_matrix, dtype=torch.float, device='cuda')
+
+    # def kl_divergence_block_diagonal_and_low_rank(self, mu_p, mu_q, B, L, epsilon):
+    #     """
+    #     랭크 1의 q 분포와 블록 대각 공분산 행렬을 가진 p 분포 사이의 KL 발산 계산
+
+    #     Parameters:
+    #     - mu_p: p 분포의 평균 벡터 (크기: [k])
+    #     - mu_q: q 분포의 평균 벡터 (크기: [k])
+    #     - B: 단일 블록 공분산 행렬 (크기: [m, m])
+    #     - L: q 분포의 저랭크 행렬 (크기: [k, 1])
+    #     - epsilon: 작은 양의 스칼라 값
+
+    #     Returns:
+    #     - kl_div: KL 발산 값 (스칼라)
+    #     """
+    #     # 모든 텐서가 동일한 디바이스에 있는지 확인
+    #     device = 'cuda'
+    #     mu_p = mu_p.to(device)
+    #     mu_q = mu_q.to(device)
+    #     B = B.to(device)
+    #     L = L.to(device)
+
+    #     k = mu_p.shape[0]         # 전체 차원 수
+    #     m = B.shape[0]            # 블록의 크기
+    #     K = k // m                # 블록의 수
+
+    #     # 1. Sigma_q의 행렬식 계산
+    #     L_norm_sq = torch.sum(L ** 2)
+    #     log_det_Sigma_q = (k - 1) * torch.log(torch.tensor(epsilon, device=device)) + torch.log(epsilon + L_norm_sq)
+
+    #     # 2. Sigma_p의 행렬식 계산
+    #     sign_B, logdet_B = torch.slogdet(B)
+    #     log_det_Sigma_p = K * logdet_B
+
+    #     # 3. B의 역행렬 및 트레이스 계산
+    #     B_inv = torch.inverse(B)
+    #     tr_B_inv = torch.trace(B_inv)
+
+    #     # 4. L^T Sigma_p^{-1} L 계산
+    #     # L을 블록 단위로 분할하여 계산
+    #     L_Sigma_p_inv_L = torch.tensor(0.0, device=device)
+    #     for i in range(K):
+    #         idx_start = i * m
+    #         idx_end = idx_start + m
+    #         L_i = L[idx_start:idx_end, 0]  # (m,)
+    #         L_Sigma_p_inv_L += L_i @ (B_inv @ L_i)
+
+    #     # 5. 트레이스 항목 계산
+    #     tr_term = L_Sigma_p_inv_L + epsilon * K * tr_B_inv
+
+    #     # 6. 마할라노비스 거리 계산
+    #     delta_mu = mu_p - mu_q
+    #     mahalanobis = torch.tensor(0.0, device=device)
+    #     for i in range(K):
+    #         idx_start = i * m
+    #         idx_end = idx_start + m
+    #         delta_mu_i = delta_mu[idx_start:idx_end]  # (m,)
+    #         mahalanobis += delta_mu_i @ (B_inv @ delta_mu_i)
+
+    #     # 7. KL 발산 계산
+    #     kl_div = 0.5 * (log_det_Sigma_p - log_det_Sigma_q - k + tr_term + mahalanobis)
+
+    #     return kl_div
+
 class Conv3dReparameterization(BaseVariationalLayer_):
     def __init__(self,
                  in_channels,

@@ -1,6 +1,6 @@
 import torch
 from utils import train_DNN, train_BNN, get_model, get_dataset, test_DNN
-from distill import distill
+from distill import distill, set_martern_prior
 import argparse
 from torch.utils.tensorboard import SummaryWriter
 import datetime
@@ -16,7 +16,7 @@ def main(args):
     train_loader, test_loader = get_dataset(args)
 
     date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    log_path = 'runs/{}/{}/{}/bs{}_lr{}_mc{}_temp_{}_ep{}_kd_{}_alpha_{}_moped_{}_{}'.format(args.data, args.model, args.type, args.bs, args.lr, args.mc_runs, args.t, args.epochs, args.distill, args.alpha, args.moped, date)
+    log_path = 'runs/{}/{}/{}/bs{}_lr{}_mc{}_temp_{}_ep{}_kd_{}_martern_{}_alpha_{}_moped_{}_{}'.format(args.data, args.model, args.type, args.bs, args.lr, args.mc_runs, args.t, args.epochs, args.distill, args.martern, args.alpha, args.moped, date)
     writer = SummaryWriter(log_path)
     
     if args.distill:
@@ -26,11 +26,18 @@ def main(args):
         print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
         model = distill(dnn_model, model, steps = 10000, alpha= args.alpha, device = device, writer = writer)
         
+    if args.martern:
+        dnn_model = get_model(args, distill=True)
+        dnn_model.load_state_dict(torch.load(args.weight))
+        print(colored(f"Weight is loaded from {args.weight}", 'green'))
+        print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
+        model = set_martern_prior(dnn_model, model, device = device)
+        
     # Optimizer
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
     
     # Learning rate scheduler
-    # args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[50, 75], gamma=0.1)
+    args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[50, 75], gamma=0.1)
     
     if args.type == 'dnn':
         train_DNN(epoch = args.epochs, 
@@ -70,6 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('--weight', type=str, help = 'DNN weight path for distillation')
     parser.add_argument('--moped', action='store_true', help='Use MOPED')
     parser.add_argument('--alpha', type=float, default= 0.0, help = 'Distill Coefficient')
+    parser.add_argument('--martern', action='store_true', help='Use Martern Prior')
     args = parser.parse_args()
     
     print(colored(args, 'blue'))
