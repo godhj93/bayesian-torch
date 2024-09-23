@@ -496,7 +496,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.init_parameters()
         self.quant_prepare = False
         self.distill = False
-        self.matern_prior = False
+        self.martern_prior = False
 
     def init_parameters(self):
         self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
