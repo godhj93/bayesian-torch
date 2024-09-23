@@ -19,7 +19,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import os 
 import torch.distributed as dist
 from torch.utils.data import DistributedSampler
-    
+from torchvision.datasets import ImageFolder
+
 def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs, bs, device):
 
     model.to(device)
@@ -80,6 +81,8 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
         acc, nll, kl = test_BNN(model, test_loader, mc_runs, bs, device, args.moped)
         print(colored(f"[Test] Acc: {acc:.5f}, NLL: {nll:.5f}, KL: {kl:,}", 'yellow'))
         
+        # args.scheduler.step()
+        # print(colored(f"Learning rate: {optimizer.param_groups[0]['lr']}", 'red'))
         # Tensorboard
         writer.add_scalar('Train/accuracy', acc, e)
         writer.add_scalar('Train/loss/NLL', np.mean(nll_total), e)
@@ -184,7 +187,8 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
         
         print(colored(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}", 'yellow'))
         
-        # args.scheduler.step()
+        args.scheduler.step()
+        print(colored(f"Learning rate: {optimizer.param_groups[0]['lr']}", 'red'))
         
         writer.add_scalar('Train/accuracy', acc_train, e)
         writer.add_scalar('Train/loss/NLL', np.mean(nlls), e)
@@ -306,7 +310,7 @@ def get_model(args, distill=False):
         model = DDP(model.to(device), device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False)
         print(colored(f"Model is wrapped by DDP", 'red'))
     
-    if args.distill:
+    if args.distill or args.martern:
         args.type = 'multi'
         
         
@@ -338,7 +342,7 @@ def get_dataset(args):
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
     
     elif args.data == 'cifar':
-        
+        print(colored(f"CIFAR-10 dataset is loaded", 'green'))
         # Simple data augmentation
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
@@ -357,6 +361,31 @@ def get_dataset(args):
         
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
+    
+    elif args.data == 'tinyimagenet':
+        print(colored(f"Tiny ImageNet dataset is loaded", 'red'))
+        transform_train = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+
+        ])
+        
+        transoform_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+
+        ])
+        train_dataset = ImageFolder(root='./tiny-imagenet-200/train/', transform = transform_train)
+        test_dataset = ImageFolder(root='./tiny-imagenet-200/val/', transform = transoform_test)
+        
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
+         
+    else:
+        raise ValueError('Dataset not found')
     
     if torch.cuda.device_count() > 1 and args.multi_gpu:
         

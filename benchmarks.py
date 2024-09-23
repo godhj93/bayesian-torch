@@ -91,7 +91,7 @@ def main(args):
         plt.title('AUROC Curve')
         plt.legend()
         plt.grid(True)
-        plt.savefig('auroc_curve.png', dpi=300)
+        plt.savefig(f'auroc_curve_{args.weight.split("/")[-2]}.png', dpi=300)
 
 # 테스트 함수 정의
 def test_ood_detection(model, in_loader, out_loader, threshold):
@@ -103,7 +103,13 @@ def test_ood_detection(model, in_loader, out_loader, threshold):
 
     with torch.no_grad():
         for images, _ in in_loader:
-            outputs, _ = model(images.cuda())
+            outputs = []
+            for _ in range(args.mc_runs):
+                
+                output, _ = model(images.cuda())
+                outputs.append(output)
+                
+            outputs = torch.stack(outputs, dim=0).mean(dim=0)
             softmax_probs = nn.Softmax(dim=1)(outputs)
             max_probs, _ = torch.max(softmax_probs, dim=1)
             in_distribution_scores.extend(max_probs.cpu().numpy())
@@ -112,7 +118,12 @@ def test_ood_detection(model, in_loader, out_loader, threshold):
     # ood_data = torch.rand((len(in_distribution_scores), 3, 32, 32))
     with torch.no_grad():
         for ood_data, _ in out_loader:
-            outputs, _ = model(ood_data.cuda())
+            outputs = []
+            for _ in range(args.mc_runs):
+                output, _ = model(ood_data.cuda())
+                outputs.append(output)
+            
+            outputs = torch.stack(outputs, dim=0).mean(dim=0)
             softmax_probs = nn.Softmax(dim=1)(outputs)
             max_probs, _ = torch.max(softmax_probs, dim=1)
             out_distribution_scores.extend(max_probs.cpu().numpy())
