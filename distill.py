@@ -31,12 +31,12 @@ def distill(dnn, bnn, steps, writer, alpha, device = 'cuda'):
             
             mu_flat = bnn_layer.mu_kernel.view(-1).to(device)
             
-            L, B = bnn_layer.get_covariance_param()
+            L, D = bnn_layer.get_covariance_param()
             
-            L, B = L.to(device), B.to(device)
+            L, D = L.to(device), D.to(device)
             
             # Check var is on the same device 
-            w_sample = LowRankMultivariateNormal(mu_flat, L, B).rsample().reshape(w_dnn.size())
+            w_sample = LowRankMultivariateNormal(mu_flat, L, D).rsample().reshape(w_dnn.size())
             
             
             loss += MSE(w_sample, w_dnn)  +  alpha / L.norm(p=1)
@@ -75,7 +75,6 @@ def distill(dnn, bnn, steps, writer, alpha, device = 'cuda'):
         print(colored(f"Linear weight copied from DNN to BNN", 'red'))
         
     # Save the model
-    torch.save(bnn_good_prior, f'Distilled_BNN_{loss.item():.2f}.pt')
     return bnn_good_prior
 
 
