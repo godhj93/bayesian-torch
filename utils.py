@@ -111,8 +111,8 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_nll_model.pth'))
             print(colored(f"Best NLL model saved at epoch {e}", 'green'))
             
-        if best_acc < acc:
-            best_acc = acc
+        if best_acc < acc_test:
+            best_acc = acc_test
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_acc_model.pth'))
             print(colored(f"Best ACC model saved at epoch {e}", 'green'))
 

@@ -466,16 +466,17 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
             
         if self.prior_variance is None:
             self.prior_cov_L = torch.zeros((weight_size, 1))
-            self.prior_cov_B = torch.ones(weight_size) 
+            self.prior_cov_D = torch.ones(weight_size) 
         else:
             raise NotImplementedError("Prior variance should be None")
             # self.prior_cov_L, self.prior_cov_B = self.prior_variance
         
         self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))        
         self.L_param = Parameter(torch.Tensor(weight_size, 1))
+        self.D_param = Parameter(torch.Tensor(1))
         # self.B = Parameter(torch.Tensor(1))
-        self.epsilon = 1e-3
-        self.B = torch.ones(weight_size) * self.epsilon
+        # self.epsilon = 1e-3
+        # self.B = torch.ones(weight_size) * self.epsilon
         
         # For Martern Prior
         self.BLOCK_MAT = self.covariance_matrix_by_filter((self.mu_kernel.shape[-2:]), sigma=1.0, lamb=1.0)
@@ -500,13 +501,6 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
 
     def init_parameters(self):
         self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
-        self.L_param.data.normal_(mean=0, std=torch.tensor(0.0485).sqrt())
-        # self.B.data.fill_(1.0)
-        # self.logB_param.data.normal_(mean=0, std=0.01)
-        
-        # if self.bias:
-        #     self.mu_bias.data.normal_(mean=self.posterior_mu_init, std=0.1)
-        #     self.rho_bias.data.normal_(mean=self.posterior_rho_init, std=0.1)
         
         nn.init.xavier_normal_(self.mu_kernel)
         
@@ -516,36 +510,38 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         std_L = variance_L ** 0.5
         
         self.L_param.data.normal_(mean=0, std=std_L)
+        self.D_param.data.normal_(mean=0, std=std_L)
 
-        #self.B.data.fill_(1.0)
     def get_covariance_param(self):        
         '''
         L: covariance factor
-        B: diagonal factor
+        D: diagonal factor
         '''
-        # print((self.B.to(self.L_param.device) * torch.ones_like(self.L_param)).shape)
-        return self.L_param, self.B.to(self.L_param.device) #* torch.ones_like(self.L_param).squeeze()
+        return self.L_param, (torch.ones_like(self.L_param) * self.D_param.to(self.L_param.device).exp()).squeeze()
 
     def forward(self, input, return_kl=True):
         weight_shape = self.mu_kernel.shape
 
         mu_flat = self.mu_kernel.view(-1)
-        L, B = self.get_covariance_param()# + (self.epsilon * torch.eye(mu_flat.size(0))).to(mu_flat.device)
-
+        L, D = self.get_covariance_param()# + (self.epsilon * torch.eye(mu_flat.size(0))).to(mu_flat.device)
         
         # Use MultivariateNormal for sampling
-        mvn = LowRankMultivariateNormal(mu_flat, L, B)
+        mvn = LowRankMultivariateNormal(mu_flat, L, D)
         weight_flat = mvn.rsample() # Reparameterization trick
         weight = weight_flat.view(weight_shape)
         
         if return_kl:
             
-            if self.distill:
-                prior_mvn = LowRankMultivariateNormal(self.prior_mean.to(mu_flat.device), self.prior_cov_L.to(mu_flat.device), self.prior_cov_B.to(mu_flat.device))
-                kl_weight = kl_divergence(mvn, prior_mvn)
+            # if self.distill:
+            #     prior_mvn = LowRankMultivariateNormal(self.prior_mean.to(mu_flat.device), self.prior_cov_L.to(mu_flat.device), self.prior_cov_B.to(mu_flat.device))
+            #     kl_weight = kl_divergence(mvn, prior_mvn)
             
             if self.martern_prior:
-                kl_weight = self.kl_divergence_block_diagonal_and_low_rank(self.prior_mean.to(mu_flat.device), mu_flat, self.BLOCK_MAT, L, self.epsilon)
+                kl_weight = self.kl_divergence_block_diagonal_and_low_rank(self.prior_mean.to(mu_flat.device), mu_flat, self.BLOCK_MAT, L, self.D_param.exp())
+            
+            else:
+                prior_mvn = LowRankMultivariateNormal(self.prior_mean.to(mu_flat.device), self.prior_cov_L.to(mu_flat.device), self.prior_cov_D.to(mu_flat.device))
+                kl_weight = kl_divergence(mvn, prior_mvn)
 
         bias = None
         if self.bias:

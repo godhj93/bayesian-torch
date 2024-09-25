@@ -61,7 +61,7 @@ def distill(dnn, bnn, steps, writer, alpha, device = 'cuda'):
         bnn_good_prior_layer.prior_mean = bnn_layer.mu_kernel.detach().clone().flatten()
         # print(colored(f"Disabled copying of prior mean", 'red'))
         bnn_good_prior_layer.prior_cov_L = bnn_layer.get_covariance_param()[0].detach()
-        bnn_good_prior_layer.prior_cov_B = bnn_layer.get_covariance_param()[1].detach()
+        bnn_good_prior_layer.prior_cov_D = bnn_layer.get_covariance_param()[1].detach()
         
         # Set the variational parameters
         # bnn_good_prior_layer.mu_kernel = bnn_layer.mu_kernel
@@ -74,7 +74,8 @@ def distill(dnn, bnn, steps, writer, alpha, device = 'cuda'):
         bnn_good_prior_layer.weight.data = dnn_layer.weight.data.clone()
         print(colored(f"Linear weight copied from DNN to BNN", 'red'))
         
-        
+    # Save the model
+    torch.save(bnn_good_prior, f'Distilled_BNN_{loss.item():.2f}.pt')
     return bnn_good_prior
 
 
