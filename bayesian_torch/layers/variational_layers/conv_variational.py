@@ -406,30 +406,32 @@ class Conv2dReparameterization(BaseVariationalLayer_):
         return out
 
 class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
+
     def __init__(self,
-                in_channels,
-                out_channels,
-                kernel_size,
-                stride=1,
-                padding=0,
-                dilation=1,
-                groups=1,
-                prior_mean = None,
-                prior_variance = None,
-                posterior_mu_init=0,
-                posterior_rho_init=-3.0,
-                bias=False):
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
+                 groups=1,
+                 prior_mean=0,
+                 prior_variance=1,
+                 posterior_mu_init=0,
+                 posterior_rho_init=-3.0,
+                 bias=True):
         """
-        Implements Conv2d layer with reparameterization trick using multivariate Gaussian distribution.
-        @Author: Heejung Shin, godhj@unist.ac.kr
-        
+        Implements Conv2d layer with reparameterization trick.
+
+        Inherits from bayesian_torch.layers.BaseVariationalLayer_
+
         Parameters:
             in_channels: int -> number of channels in the input image,
             out_channels: int -> number of channels produced by the convolution,
-            kernel_size: int or tuple -> size of the convolving kernel,
-            stride: int or tuple -> stride of the convolution. Default: 1,
-            padding: int or tuple -> zero-padding added to both sides of the input. Default: 0,
-            dilation: int or tuple -> spacing between kernel elements. Default: 1,
+            kernel_size: int -> size of the convolving kernel,
+            stride: int -> stride of the convolution. Default: 1,
+            padding: int -> zero-padding added to both sides of the input. Default: 0,
+            dilation: int -> spacing between kernel elements. Default: 1,
             groups: int -> number of blocked connections from input channels to output channels,
             prior_mean: float -> mean of the prior arbitrary distribution to be used on the complexity cost,
             prior_variance: float -> variance of the prior arbitrary distribution to be used on the complexity cost,
@@ -437,287 +439,329 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
             posterior_rho_init: float -> init trainable rho parameter representing the sigma of the approximate posterior through softplus function,
             bias: bool -> if set to False, the layer will not learn an additive bias. Default: True,
         """
+
         super(Conv2dReparameterization_Multivariate, self).__init__()
         if in_channels % groups != 0:
             raise ValueError('invalid in_channels size')
         if out_channels % groups != 0:
-            raise ValueError('invalid out_channels size')
+            raise ValueError('invalid in_channels size')
 
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size = kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size)
+        self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
         self.dilation = dilation
         self.groups = groups
-        self.prior_mean = prior_mean
-        self.prior_variance = prior_variance
-        self.posterior_mu_init = posterior_mu_init
-        self.posterior_rho_init = posterior_rho_init
+        # variance of weight --> sigma = log (1 + exp(rho))
         self.bias = bias
 
-        kernel_size = self.kernel_size
+        kernel_size = get_kernel_size(kernel_size, 2)
         weight_size = out_channels * (in_channels // groups) * kernel_size[0] * kernel_size[1]
-
-        if self.prior_mean is None:
-            self.prior_mean = torch.zeros(weight_size)
-        else:
-            self.prior_mean = prior_mean.view(-1)
-            
-        if self.prior_variance is None:
-            self.prior_cov_L = torch.zeros((weight_size, 1))
-            self.prior_cov_D = torch.ones(weight_size) 
-        else:
-            raise NotImplementedError("Prior variance should be None")
-            # self.prior_cov_L, self.prior_cov_B = self.prior_variance
+        # self.mu_kernel = Parameter(
+        #     torch.Tensor(out_channels, in_channels // groups, kernel_size[0],
+        #                  kernel_size[1]))
         
-        self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))        
+        self.mu_kernel = Parameter(torch.Tensor(weight_size))
         self.L_param = Parameter(torch.Tensor(weight_size, 1))
         self.D_param = Parameter(torch.Tensor(1))
-        # self.B = Parameter(torch.Tensor(1))
-        # self.epsilon = 1e-3
-        # self.B = torch.ones(weight_size) * self.epsilon
         
-        # For Martern Prior
-        self.BLOCK_MAT = self.covariance_matrix_by_filter((self.mu_kernel.shape[-2:]), sigma=1.0, lamb=1.0)
+        self.register_buffer(
+            'prior_mean',
+            torch.Tensor(weight_size),
+            # torch.Tensor(out_channels, in_channels // groups, kernel_size[0],
+            #              kernel_size[1]),
+            persistent=True)
         
-        if self.bias:
-            self.mu_bias = Parameter(torch.Tensor(out_channels))
-            self.rho_bias = Parameter(torch.Tensor(out_channels))
-            self.register_buffer('eps_bias', torch.Tensor(out_channels), persistent=False)
-            self.register_buffer('prior_bias_mu', torch.Tensor(out_channels), persistent=False)
-            self.register_buffer('prior_bias_sigma', torch.Tensor(out_channels), persistent=False)
-        else:
-            self.register_parameter('mu_bias', None)
-            self.register_parameter('rho_bias', None)
-            self.register_buffer('eps_bias', None, persistent=False)
-            self.register_buffer('prior_bias_mu', None, persistent=False)
-            self.register_buffer('prior_bias_sigma', None, persistent=False)
+        self.register_buffer(
+            'prior_cov_L', 
+            torch.Tensor(weight_size, 1), 
+            persistent=True)
+        
+        self.register_buffer(
+            'prior_cov_D', 
+            torch.Tensor(weight_size), 
+            persistent=True)
 
-        self.init_parameters()
-        self.quant_prepare = False
-        self.distill = False
-        self.martern_prior = False
+        self.init_parameters(weight_size)
 
-    def init_parameters(self):
-        self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
+    def init_parameters(self, weight_size):
         
-        nn.init.xavier_normal_(self.mu_kernel)
-        
-        fan_in = self.in_channels
-        fan_out = self.out_channels
-        variance_L = 2.0 / (fan_in + fan_out)
-        std_L = variance_L ** 0.5
-        
-        self.L_param.data.normal_(mean=0, std=std_L)
-        self.D_param.data.normal_(mean=0, std=std_L)
+        # Set Multivariate Normal Prior as N(0, I)
+        self.prior_mean.data.copy_(torch.ones(weight_size))
+        self.prior_cov_L.data.copy_(torch.zeros((weight_size, 1)))
+        self.prior_cov_D.data.copy_(torch.ones(weight_size))
 
-    def get_covariance_param(self):        
-        '''
-        L: covariance factor
-        D: diagonal factor
-        '''
-        return self.L_param, (torch.ones_like(self.L_param) * self.D_param.to(self.L_param.device).exp()).squeeze()
+        self.mu_kernel.data.normal_(mean= 0 , std=0.1)
+        self.L_param.data.normal_(mean= 0, std=0.1)
+        self.D_param.data.normal_(mean= 0, std=0.1)
 
-    def forward(self, input, return_kl=True):
-        weight_shape = self.mu_kernel.shape
-
-        mu_flat = self.mu_kernel.view(-1)
-        L, D = self.get_covariance_param()# + (self.epsilon * torch.eye(mu_flat.size(0))).to(mu_flat.device)
-        
-        # Use MultivariateNormal for sampling
-        mvn = LowRankMultivariateNormal(mu_flat, L, D)
-        weight_flat = mvn.rsample() # Reparameterization trick
-        weight = weight_flat.view(weight_shape)
-        
-        if return_kl:
-            
-            # if self.distill:
-            #     prior_mvn = LowRankMultivariateNormal(self.prior_mean.to(mu_flat.device), self.prior_cov_L.to(mu_flat.device), self.prior_cov_B.to(mu_flat.device))
-            #     kl_weight = kl_divergence(mvn, prior_mvn)
-            
-            if self.martern_prior:
-                kl_weight = self.kl_divergence_block_diagonal_and_low_rank(self.prior_mean.to(mu_flat.device), mu_flat, self.BLOCK_MAT, L, self.D_param.exp())
-            
-            else:
-                prior_mvn = LowRankMultivariateNormal(self.prior_mean.to(mu_flat.device), self.prior_cov_L.to(mu_flat.device), self.prior_cov_D.to(mu_flat.device))
-                kl_weight = kl_divergence(mvn, prior_mvn)
-
-        bias = None
+    def kl_loss(self):
+        raise NotImplementedError("KL Loss is not implemented for this layer")
+        sigma_weight = torch.log1p(torch.exp(self.rho_kernel))
+        kl = self.kl_div(self.mu_kernel, sigma_weight, self.prior_weight_mu, self.prior_weight_sigma)
         if self.bias:
             sigma_bias = torch.log1p(torch.exp(self.rho_bias))
-            eps_bias = self.eps_bias.data.normal_()
-            bias = self.mu_bias + sigma_bias * eps_bias
-            if return_kl:
-                kl_bias = self.kl_div(self.mu_bias, sigma_bias, self.prior_bias_mu, self.prior_bias_sigma)
+            kl += self.kl_div(self.mu_bias, sigma_bias, self.prior_bias_mu, self.prior_bias_sigma)
 
-        out = F.conv2d(input, weight, bias, self.stride, self.padding, self.dilation, self.groups)
+        return kl
 
+    def forward(self, input, return_kl=True):
+        if self.dnn_to_bnn_flag:
+            return_kl = False
+
+        D_param = F.softplus(self.D_param.expand_as(self.mu_kernel))
+        posterior_mvn = LowRankMultivariateNormal(self.mu_kernel, self.L_param, D_param)
+        
+        weight = posterior_mvn.rsample().view(self.out_channels, self.in_channels, self.kernel_size, self.kernel_size)
+        
+        self.prior_mvn = LowRankMultivariateNormal(
+            self.prior_mean.to(weight.device),
+            self.prior_cov_L.to(weight.device),
+            self.prior_cov_D.to(weight.device)
+        )
+        
         if return_kl:
-            if self.bias:
-                kl = kl_weight + kl_bias
-            else:
-                kl = kl_weight
+            kl_weight = kl_divergence(posterior_mvn, self.prior_mvn)
+            # kl_weight = self.kl_div(self.mu_kernel, sigma_weight,
+            #                         self.prior_weight_mu, self.prior_weight_sigma)
+       
+        bias = None
+        out = F.conv2d(input, weight, bias, self.stride, self.padding,
+                       self.dilation, self.groups)
+
+       
+        if return_kl:
+           
+            kl = kl_weight
+            
             return out, kl
             
         return out
+
+# class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
+#     def __init__(self,
+#                 in_channels,
+#                 out_channels,
+#                 kernel_size,
+#                 stride=1,
+#                 padding=0,
+#                 dilation=1,
+#                 groups=1,
+#                 prior_mean = None,
+#                 prior_variance = None,
+#                 posterior_mu_init=0,
+#                 posterior_rho_init=-3.0,
+#                 bias=False):
+#         """
+#         Implements Conv2d layer with reparameterization trick using multivariate Gaussian distribution.
+#         @Author: Heejung Shin, godhj@unist.ac.kr
+        
+#         Parameters:
+#             in_channels: int -> number of channels in the input image,
+#             out_channels: int -> number of channels produced by the convolution,
+#             kernel_size: int or tuple -> size of the convolving kernel,
+#             stride: int or tuple -> stride of the convolution. Default: 1,
+#             padding: int or tuple -> zero-padding added to both sides of the input. Default: 0,
+#             dilation: int or tuple -> spacing between kernel elements. Default: 1,
+#             groups: int -> number of blocked connections from input channels to output channels,
+#             prior_mean: float -> mean of the prior arbitrary distribution to be used on the complexity cost,
+#             prior_variance: float -> variance of the prior arbitrary distribution to be used on the complexity cost,
+#             posterior_mu_init: float -> init trainable mu parameter representing mean of the approximate posterior,
+#             posterior_rho_init: float -> init trainable rho parameter representing the sigma of the approximate posterior through softplus function,
+#             bias: bool -> if set to False, the layer will not learn an additive bias. Default: True,
+#         """
+#         super(Conv2dReparameterization_Multivariate, self).__init__()
+#         if in_channels % groups != 0:
+#             raise ValueError('invalid in_channels size')
+#         if out_channels % groups != 0:
+#             raise ValueError('invalid out_channels size')
+
+#         self.in_channels = in_channels
+#         self.out_channels = out_channels
+#         self.kernel_size = kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size)
+#         self.stride = stride
+#         self.padding = padding
+#         self.dilation = dilation
+#         self.groups = groups
+#         self.prior_mean = prior_mean
+#         self.prior_variance = prior_variance
+#         self.posterior_mu_init = posterior_mu_init
+#         self.posterior_rho_init = posterior_rho_init
+#         self.bias = bias
+
+#         kernel_size = self.kernel_size
+#         weight_size = out_channels * (in_channels // groups) * kernel_size[0] * kernel_size[1]
+
+#         if self.prior_mean is None:
+#             self.prior_mean = torch.zeros(weight_size)
+#         else:
+#             self.prior_mean = prior_mean.view(-1)
+            
+#         if self.prior_variance is None:
+#             self.prior_cov_L = torch.zeros((weight_size, 1))
+#             self.prior_cov_D = torch.ones(weight_size) 
+#         else:
+#             raise NotImplementedError("Prior variance should be None")
+#             # self.prior_cov_L, self.prior_cov_B = self.prior_variance
+        
+#         self.mu_kernel = Parameter(torch.Tensor(out_channels, in_channels // groups, kernel_size[0], kernel_size[1]))        
+#         self.L_param = Parameter(torch.Tensor(weight_size, 1))
+#         self.D_param = Parameter(torch.Tensor(1))
+#         # self.B = Parameter(torch.Tensor(1))
+#         # self.epsilon = 1e-3
+#         # self.B = torch.ones(weight_size) * self.epsilon
+        
+#         # For Martern Prior
+#         self.BLOCK_MAT = self.covariance_matrix_by_filter((self.mu_kernel.shape[-2:]), sigma=1.0, lamb=1.0)
+        
+#         if self.bias:
+#             self.mu_bias = Parameter(torch.Tensor(out_channels))
+#             self.rho_bias = Parameter(torch.Tensor(out_channels))
+#             self.register_buffer('eps_bias', torch.Tensor(out_channels), persistent=False)
+#             self.register_buffer('prior_bias_mu', torch.Tensor(out_channels), persistent=False)
+#             self.register_buffer('prior_bias_sigma', torch.Tensor(out_channels), persistent=False)
+#         else:
+#             self.register_parameter('mu_bias', None)
+#             self.register_parameter('rho_bias', None)
+#             self.register_buffer('eps_bias', None, persistent=False)
+#             self.register_buffer('prior_bias_mu', None, persistent=False)
+#             self.register_buffer('prior_bias_sigma', None, persistent=False)
+
+#         self.init_parameters()
+#         self.quant_prepare = False
+#         self.distill = False
+#         self.martern_prior = False
+
+#     def init_parameters(self):
+#         self.mu_kernel.data.normal_(mean=self.posterior_mu_init, std=0.1)
+        
+#         nn.init.xavier_normal_(self.mu_kernel)
+        
+#         fan_in = self.in_channels
+#         fan_out = self.out_channels
+#         variance_L = 2.0 / (fan_in + fan_out)
+#         std_L = variance_L ** 0.5
+        
+#         self.L_param.data.normal_(mean=0, std=std_L)
+#         self.D_param.data.normal_(mean=0, std=std_L)
+
+#     def get_covariance_param(self):        
+#         '''
+#         L: covariance factor
+#         D: diagonal factor
+#         '''
+#         return self.L_param, (torch.ones_like(self.L_param) * self.D_param.to(self.L_param.device).exp()).squeeze()
+
+#     def forward(self, input, return_kl=True):
+#         weight_shape = self.mu_kernel.shape
+
+#         mu_flat = self.mu_kernel.view(-1)
+#         L, D = self.get_covariance_param()# + (self.epsilon * torch.eye(mu_flat.size(0))).to(mu_flat.device)
+        
+#         # Use MultivariateNormal for sampling
+#         mvn = LowRankMultivariateNormal(mu_flat, L, D)
+#         weight_flat = mvn.rsample() # Reparameterization trick
+#         weight = weight_flat.view(weight_shape)
+        
+#         if return_kl:
+            
+#             # if self.distill:
+#             #     prior_mvn = LowRankMultivariateNormal(self.prior_mean.to(mu_flat.device), self.prior_cov_L.to(mu_flat.device), self.prior_cov_B.to(mu_flat.device))
+#             #     kl_weight = kl_divergence(mvn, prior_mvn)
+            
+#             if self.martern_prior:
+#                 kl_weight = self.kl_divergence_block_diagonal_and_low_rank(self.prior_mean.to(mu_flat.device), mu_flat, self.BLOCK_MAT, L, self.D_param.exp())
+            
+#             else:
+#                 prior_mvn = LowRankMultivariateNormal(self.prior_mean.to(mu_flat.device), self.prior_cov_L.to(mu_flat.device), self.prior_cov_D.to(mu_flat.device))
+#                 kl_weight = kl_divergence(mvn, prior_mvn)
+
+#         bias = None
+#         if self.bias:
+#             sigma_bias = torch.log1p(torch.exp(self.rho_bias))
+#             eps_bias = self.eps_bias.data.normal_()
+#             bias = self.mu_bias + sigma_bias * eps_bias
+#             if return_kl:
+#                 kl_bias = self.kl_div(self.mu_bias, sigma_bias, self.prior_bias_mu, self.prior_bias_sigma)
+
+#         out = F.conv2d(input, weight, bias, self.stride, self.padding, self.dilation, self.groups)
+
+#         if return_kl:
+#             if self.bias:
+#                 kl = kl_weight + kl_bias
+#             else:
+#                 kl = kl_weight
+#             return out, kl
+            
+#         return out
     
-    def covariance_matrix_by_filter(self, filter_size, sigma=1.0, lamb=1.0):
-        """
-        고정된 필터 크기에 대해 공분산 행렬을 계산하는 함수.
-        """
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+#     def covariance_matrix_by_filter(self, filter_size, sigma=1.0, lamb=1.0):
+#         """
+#         고정된 필터 크기에 대해 공분산 행렬을 계산하는 함수.
+#         """
+#         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-        # 필터 좌표 생성
-        coords = torch.tensor([(float(i), float(j)) for i in range(filter_size[0]) for j in range(filter_size[1])], device=device)
-        n = coords.shape[0]
+#         # 필터 좌표 생성
+#         coords = torch.tensor([(float(i), float(j)) for i in range(filter_size[0]) for j in range(filter_size[1])], device=device)
+#         n = coords.shape[0]
 
-        # 좌표 간 거리 계산
-        diff = coords.unsqueeze(1) - coords.unsqueeze(0)  # 크기: [n, n, 2]
-        dist = torch.norm(diff, dim=2)  # 크기: [n, n]
+#         # 좌표 간 거리 계산
+#         diff = coords.unsqueeze(1) - coords.unsqueeze(0)  # 크기: [n, n, 2]
+#         dist = torch.norm(diff, dim=2)  # 크기: [n, n]
 
-        # 공분산 계산
-        cov_matrix = (sigma ** 2) * torch.exp(-dist / lamb)  # 크기: [n, n]
+#         # 공분산 계산
+#         cov_matrix = (sigma ** 2) * torch.exp(-dist / lamb)  # 크기: [n, n]
 
-        return cov_matrix
+#         return cov_matrix
     
-    def kl_divergence_block_diagonal_and_low_rank(self, mu_p, mu_q, B, L, epsilon):
-        """
-        랭크 1의 q 분포와 블록 대각 공분산 행렬을 가진 p 분포 사이의 KL 발산 계산
-        """
-        # 모든 텐서가 동일한 디바이스에 있는지 확인
-        device = 'cuda'
-        assert device == 'cuda', 'Device should be cuda'
-        mu_p = mu_p.to(device)
-        mu_p = mu_p.to(device)
-        B = B.to(device)
-        L = L.to(device)
+#     def kl_divergence_block_diagonal_and_low_rank(self, mu_p, mu_q, B, L, epsilon):
+#         """
+#         랭크 1의 q 분포와 블록 대각 공분산 행렬을 가진 p 분포 사이의 KL 발산 계산
+#         """
+#         # 모든 텐서가 동일한 디바이스에 있는지 확인
+#         device = 'cuda'
+#         assert device == 'cuda', 'Device should be cuda'
+#         mu_p = mu_p.to(device)
+#         mu_p = mu_p.to(device)
+#         B = B.to(device)
+#         L = L.to(device)
 
-        k = mu_p.shape[0]         # 전체 차원 수
-        m = B.shape[0]            # 블록의 크기
-        K = k // m                # 블록의 수
+#         k = mu_p.shape[0]         # 전체 차원 수
+#         m = B.shape[0]            # 블록의 크기
+#         K = k // m                # 블록의 수
 
-        # epsilon을 텐서가 아닌 스칼라 값으로 사용
-        epsilon_tensor = torch.tensor(epsilon, device=device)
+#         # epsilon을 텐서가 아닌 스칼라 값으로 사용
+#         epsilon_tensor = torch.tensor(epsilon, device=device)
 
-        # 1. Sigma_q의 행렬식 계산
-        L_norm_sq = torch.sum(L ** 2)
-        log_det_Sigma_q = (k - 1) * torch.log(epsilon_tensor) + torch.log(epsilon + L_norm_sq)
+#         # 1. Sigma_q의 행렬식 계산
+#         L_norm_sq = torch.sum(L ** 2)
+#         log_det_Sigma_q = (k - 1) * torch.log(epsilon_tensor) + torch.log(epsilon + L_norm_sq)
 
-        # 2. Sigma_p의 행렬식 계산
-        sign_B, logdet_B = torch.slogdet(B)
-        log_det_Sigma_p = K * logdet_B
+#         # 2. Sigma_p의 행렬식 계산
+#         sign_B, logdet_B = torch.slogdet(B)
+#         log_det_Sigma_p = K * logdet_B
 
-        # 3. B의 역행렬 및 트레이스 계산
-        B_inv = torch.inverse(B)
-        tr_B_inv = torch.trace(B_inv)
+#         # 3. B의 역행렬 및 트레이스 계산
+#         B_inv = torch.inverse(B)
+#         tr_B_inv = torch.trace(B_inv)
 
-        # 4. L^T Sigma_p^{-1} L 계산 (벡터화)
-        L_reshaped = L.view(K, m)  # 크기: [K, m]
-        L_Sigma_p_inv_L = torch.sum((L_reshaped @ B_inv) * L_reshaped)
+#         # 4. L^T Sigma_p^{-1} L 계산 (벡터화)
+#         L_reshaped = L.view(K, m)  # 크기: [K, m]
+#         L_Sigma_p_inv_L = torch.sum((L_reshaped @ B_inv) * L_reshaped)
 
-        # 5. 트레이스 항목 계산
-        tr_term = L_Sigma_p_inv_L + epsilon * K * tr_B_inv
+#         # 5. 트레이스 항목 계산
+#         tr_term = L_Sigma_p_inv_L + epsilon * K * tr_B_inv
 
-        # 6. 마할라노비스 거리 계산 (벡터화)
-        delta_mu = mu_p - mu_q
-        delta_mu_reshaped = delta_mu.view(K, m)  # 크기: [K, m]
-        mahalanobis = torch.sum((delta_mu_reshaped @ B_inv) * delta_mu_reshaped)
+#         # 6. 마할라노비스 거리 계산 (벡터화)
+#         delta_mu = mu_p - mu_q
+#         delta_mu_reshaped = delta_mu.view(K, m)  # 크기: [K, m]
+#         mahalanobis = torch.sum((delta_mu_reshaped @ B_inv) * delta_mu_reshaped)
 
-        # 7. KL 발산 계산
-        kl_div = 0.5 * (log_det_Sigma_p - log_det_Sigma_q - k + tr_term + mahalanobis)
+#         # 7. KL 발산 계산
+#         kl_div = 0.5 * (log_det_Sigma_p - log_det_Sigma_q - k + tr_term + mahalanobis)
 
-        return kl_div
-
-    # def covariance_matrix_by_filter(self, filter_size, sigma=1.0, lamb=1.0):
-    #     """
-    #     고정된 필터 크기에 대해 공분산 행렬을 계산하는 함수.
-        
-    #     Parameters:
-    #     filter_size: 필터의 (높이, 너비) 크기 (예: (3, 3) 등)
-    #     sigma: 공분산의 스케일링 값 (분산)
-    #     lamb: 거리 감소 파라미터 (length scale)
-        
-    #     Returns:
-    #     고정된 크기의 필터에 대한 공분산 행렬
-    #     """
-    #     # 필터 좌표 생성
-    #     coords = [(float(i), float(j)) for i in range(filter_size[0]) for j in range(filter_size[1])]
-    #     n = len(coords)
-    #     cov_matrix = np.zeros((n, n))
-        
-    #     # 두 좌표 사이의 거리를 기반으로 공분산 계산
-    #     for i in range(n):
-    #         for j in range(n):
-    #             # 두 좌표 간 거리 계산 (유클리드 거리 사용)
-    #             d = np.linalg.norm(np.array(coords[i]) - np.array(coords[j]))
-    #             # 공분산 계산
-    #             cov_matrix[i, j] = sigma**2 * np.exp(-d / lamb)
-        
-    #     return torch.tensor(cov_matrix, dtype=torch.float, device='cuda')
-
-    # def kl_divergence_block_diagonal_and_low_rank(self, mu_p, mu_q, B, L, epsilon):
-    #     """
-    #     랭크 1의 q 분포와 블록 대각 공분산 행렬을 가진 p 분포 사이의 KL 발산 계산
-
-    #     Parameters:
-    #     - mu_p: p 분포의 평균 벡터 (크기: [k])
-    #     - mu_q: q 분포의 평균 벡터 (크기: [k])
-    #     - B: 단일 블록 공분산 행렬 (크기: [m, m])
-    #     - L: q 분포의 저랭크 행렬 (크기: [k, 1])
-    #     - epsilon: 작은 양의 스칼라 값
-
-    #     Returns:
-    #     - kl_div: KL 발산 값 (스칼라)
-    #     """
-    #     # 모든 텐서가 동일한 디바이스에 있는지 확인
-    #     device = 'cuda'
-    #     mu_p = mu_p.to(device)
-    #     mu_q = mu_q.to(device)
-    #     B = B.to(device)
-    #     L = L.to(device)
-
-    #     k = mu_p.shape[0]         # 전체 차원 수
-    #     m = B.shape[0]            # 블록의 크기
-    #     K = k // m                # 블록의 수
-
-    #     # 1. Sigma_q의 행렬식 계산
-    #     L_norm_sq = torch.sum(L ** 2)
-    #     log_det_Sigma_q = (k - 1) * torch.log(torch.tensor(epsilon, device=device)) + torch.log(epsilon + L_norm_sq)
-
-    #     # 2. Sigma_p의 행렬식 계산
-    #     sign_B, logdet_B = torch.slogdet(B)
-    #     log_det_Sigma_p = K * logdet_B
-
-    #     # 3. B의 역행렬 및 트레이스 계산
-    #     B_inv = torch.inverse(B)
-    #     tr_B_inv = torch.trace(B_inv)
-
-    #     # 4. L^T Sigma_p^{-1} L 계산
-    #     # L을 블록 단위로 분할하여 계산
-    #     L_Sigma_p_inv_L = torch.tensor(0.0, device=device)
-    #     for i in range(K):
-    #         idx_start = i * m
-    #         idx_end = idx_start + m
-    #         L_i = L[idx_start:idx_end, 0]  # (m,)
-    #         L_Sigma_p_inv_L += L_i @ (B_inv @ L_i)
-
-    #     # 5. 트레이스 항목 계산
-    #     tr_term = L_Sigma_p_inv_L + epsilon * K * tr_B_inv
-
-    #     # 6. 마할라노비스 거리 계산
-    #     delta_mu = mu_p - mu_q
-    #     mahalanobis = torch.tensor(0.0, device=device)
-    #     for i in range(K):
-    #         idx_start = i * m
-    #         idx_end = idx_start + m
-    #         delta_mu_i = delta_mu[idx_start:idx_end]  # (m,)
-    #         mahalanobis += delta_mu_i @ (B_inv @ delta_mu_i)
-
-    #     # 7. KL 발산 계산
-    #     kl_div = 0.5 * (log_det_Sigma_p - log_det_Sigma_q - k + tr_term + mahalanobis)
-
-    #     return kl_div
+#         return kl_div
 
 class Conv3dReparameterization(BaseVariationalLayer_):
     def __init__(self,
