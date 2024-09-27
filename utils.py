@@ -64,14 +64,14 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
             nll = F.cross_entropy(output, target)
             
-            loss = nll * (1/args.t) + kl_loss #/ bs # args.t: Cold posterior temperature
+            loss = nll * (1/args.t) + kl_loss / bs # args.t: Cold posterior temperature
             # loss = nll
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             
             nll_total.append(nll.detach().cpu())
-            kl_total.append(kl_loss.detach().cpu())
+            kl_total.append(kl_loss.detach().cpu() / bs)
             
             total += target.size(0)
             correct += (predicted == target).sum().item()
