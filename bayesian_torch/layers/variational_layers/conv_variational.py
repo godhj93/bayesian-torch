@@ -462,8 +462,9 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         #     torch.Tensor(out_channels, in_channels // groups, kernel_size[0],
         #                  kernel_size[1]))
         
+        rank = 1
         self.mu_kernel = Parameter(torch.Tensor(weight_size))
-        self.L_param = Parameter(torch.Tensor(weight_size, 1))
+        self.L_param = Parameter(torch.Tensor(weight_size, rank))
         self.D_param = Parameter(torch.Tensor(1))
         
         self.register_buffer(
@@ -488,13 +489,13 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
     def init_parameters(self, weight_size):
         
         # Set Multivariate Normal Prior as N(0, I)
-        self.prior_mean.data.copy_(torch.ones(weight_size))
+        self.prior_mean.data.copy_(torch.zeros(weight_size))
         self.prior_cov_L.data.copy_(torch.zeros((weight_size, 1)))
         self.prior_cov_D.data.copy_(torch.ones(weight_size))
 
-        self.mu_kernel.data.normal_(mean= 0 , std=0.1)
-        self.L_param.data.normal_(mean= 0, std=0.1)
-        self.D_param.data.normal_(mean= 0, std=0.1)
+        self.mu_kernel.data.normal_(mean= 0 , std=1)
+        self.L_param.data.normal_(mean= 0, std=1)
+        self.D_param.data.normal_(mean= 0, std=1)
 
     def kl_loss(self):
         raise NotImplementedError("KL Loss is not implemented for this layer")
@@ -510,6 +511,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         if self.dnn_to_bnn_flag:
             return_kl = False
 
+        # D_param = F.softplus(self.D_param.expand_as(self.mu_kernel))
         D_param = F.softplus(self.D_param.expand_as(self.mu_kernel))
         posterior_mvn = LowRankMultivariateNormal(self.mu_kernel, self.L_param, D_param)
         

@@ -11,6 +11,7 @@ from models import SimpleCNN, SimpleCNN_uni, SimpleCNN_multi, LeNet5, LeNet5_uni
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
+from bayesian_torch.layers.variational_layers.conv_variational import Conv2dReparameterization, Conv2dReparameterization_Multivariate
 # Dataset
 from torchvision import datasets, transforms
 
@@ -63,14 +64,14 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
             nll = F.cross_entropy(output, target)
             
-            loss = nll * (1/args.t) + kl_loss / bs # args.t: Cold posterior temperature
+            loss = nll * (1/args.t) + kl_loss #/ bs # args.t: Cold posterior temperature
             # loss = nll
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             
             nll_total.append(nll.detach().cpu())
-            kl_total.append(kl_loss.detach().cpu() / bs)
+            kl_total.append(kl_loss.detach().cpu())
             
             total += target.size(0)
             correct += (predicted == target).sum().item()
@@ -313,8 +314,11 @@ def get_model(args, distill=False):
     if args.distill or args.martern:
         args.type = 'multi'
         
-        
-    
+    if args.data == 'mnist' and args.model == 'resnet20':
+        model.conv1 = Conv2dReparameterization(1, 16, 3, 1, 1) if args.type == 'uni' else Conv2dReparameterization_Multivariate(1, 16, 3, 1, 1)
+        print(colored(f"{args.type} Conv1 input channel is changed to 1", 'red'))
+    else:
+        pass
     return model
 
 def get_dataset(args):
