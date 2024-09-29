@@ -68,11 +68,12 @@ def distill(dnn, bnn, steps, writer, alpha, device = 'cuda'):
         # bnn_good_prior_layer.L_param.data = bnn_layer.get_covariance_param()[0].detach().clone()
         # bnn_good_prior_layer.B.data = bnn_layer.get_covariance_param()[1].detach().clone()
         
-    for dnn_layer, bnn_good_prior_layer in zip(dnn_linear_layers, bnn_good_prior_linear_layers):
+    print(colored(f"Disabled copying weights from DNN to BNN", 'red'))
+    # for dnn_layer, bnn_good_prior_layer in zip(dnn_linear_layers, bnn_good_prior_linear_layers):
         
-        # Set the prior
-        bnn_good_prior_layer.weight.data = dnn_layer.weight.data.clone()
-        print(colored(f"Linear weight copied from DNN to BNN", 'red'))
+    #     # Set the prior
+    #     bnn_good_prior_layer.weight.data = dnn_layer.weight.data.clone()
+    #     print(colored(f"Linear weight copied from DNN to BNN", 'red'))
         
     # Save the model
     return bnn_good_prior
@@ -81,12 +82,11 @@ def distill(dnn, bnn, steps, writer, alpha, device = 'cuda'):
 def set_martern_prior(dnn, bnn, device = 'cuda'):
     
     bnn_good_prior = copy.deepcopy(bnn)
-    
             
     # Set the prior and variational parameters 
     bnn_good_prior_conv_layers = get_conv_layers(bnn_good_prior)
-    bnn_good_prior_linear_layers = get_linear_layers(bnn_good_prior)
-    dnn_linear_layers = get_linear_layers(dnn)
+    # bnn_good_prior_linear_layers = get_linear_layers(bnn_good_prior)
+    # dnn_linear_layers = get_linear_layers(dnn)
     
     for bnn_good_prior_layer in tqdm(bnn_good_prior_conv_layers, total = len(bnn_good_prior_conv_layers), ncols=0, desc="Setting Martern prior"):
         
@@ -100,11 +100,12 @@ def set_martern_prior(dnn, bnn, device = 'cuda'):
         
     print(colored(f"Martern prior set for Conv layers", 'red'))
     
-    for dnn_layer, bnn_good_prior_layer in zip(dnn_linear_layers, bnn_good_prior_linear_layers):
+    print(colored(f"Disabled copying weights from DNN to BNN", 'red'))
+    # for dnn_layer, bnn_good_prior_layer in zip(dnn_linear_layers, bnn_good_prior_linear_layers):
         
-        # Set the prior
-        bnn_good_prior_layer.weight.data = dnn_layer.weight.data.clone()
-        print(colored(f"Linear weight copied from DNN to BNN", 'red'))
+    #     # Set the prior
+    #     bnn_good_prior_layer.weight.data = dnn_layer.weight.data.clone()
+    #     print(colored(f"Linear weight copied from DNN to BNN", 'red'))
         
     return bnn_good_prior
   
