@@ -487,6 +487,9 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
 
         self.init_parameters(weight_size)
 
+        self.martern_prior = False
+        self.BLOCK_MAT = self.covariance_matrix_by_filter((kernel_size[0], kernel_size[1]), sigma=1.0, lamb=1.0)
+        
     def init_parameters(self, weight_size):
         
         # Set Multivariate Normal Prior as N(0, I)
@@ -523,9 +526,11 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         )
         
         if return_kl:
-            kl_weight = kl_divergence(self.variational_mvn, self.prior_mvn)
-            # kl_weight = self.kl_div(self.mu_kernel, sigma_weight,
-            #                         self.prior_weight_mu, self.prior_weight_sigma)
+            
+            if self.martern_prior:
+                kl_weight = self.kl_divergence_block_diagonal_and_low_rank(self.mu_kernel, self.prior_mean, self.BLOCK_MAT, self.L_param, F.softplus(self.D_param))
+            else:
+                kl_weight = kl_divergence(self.variational_mvn, self.prior_mvn)
        
         bias = None
         out = F.conv2d(input, weight, bias, self.stride, self.padding,
@@ -540,6 +545,74 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
             return out, kl
             
         return out
+    
+    
+    def covariance_matrix_by_filter(self, filter_size, sigma=1.0, lamb=1.0):
+        """
+        고정된 필터 크기에 대해 공분산 행렬을 계산하는 함수.
+        """
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        # 필터 좌표 생성
+        coords = torch.tensor([(float(i), float(j)) for i in range(filter_size[0]) for j in range(filter_size[1])], device=device)
+        n = coords.shape[0]
+
+        # 좌표 간 거리 계산
+        diff = coords.unsqueeze(1) - coords.unsqueeze(0)  # 크기: [n, n, 2]
+        dist = torch.norm(diff, dim=2)  # 크기: [n, n]
+
+        # 공분산 계산
+        cov_matrix = (sigma ** 2) * torch.exp(-dist / lamb)  # 크기: [n, n]
+
+        return cov_matrix
+    
+    def kl_divergence_block_diagonal_and_low_rank(self, mu_p, mu_q, B, L, epsilon):
+        """
+        랭크 1의 q 분포와 블록 대각 공분산 행렬을 가진 p 분포 사이의 KL 발산 계산
+        """
+        # 모든 텐서가 동일한 디바이스에 있는지 확인
+        device = 'cuda'
+        assert device == 'cuda', 'Device should be cuda'
+        mu_p = mu_p.to(device)
+        mu_p = mu_p.to(device)
+        B = B.to(device)
+        L = L.to(device)
+
+        k = mu_p.shape[0]         # 전체 차원 수
+        m = B.shape[0]            # 블록의 크기
+        K = k // m                # 블록의 수
+
+        # epsilon을 텐서가 아닌 스칼라 값으로 사용
+        epsilon_tensor = torch.tensor(epsilon, device=device)
+
+        # 1. Sigma_q의 행렬식 계산
+        L_norm_sq = torch.sum(L ** 2)
+        log_det_Sigma_q = (k - 1) * torch.log(epsilon_tensor) + torch.log(epsilon + L_norm_sq)
+
+        # 2. Sigma_p의 행렬식 계산
+        sign_B, logdet_B = torch.slogdet(B)
+        log_det_Sigma_p = K * logdet_B
+
+        # 3. B의 역행렬 및 트레이스 계산
+        B_inv = torch.inverse(B)
+        tr_B_inv = torch.trace(B_inv)
+
+        # 4. L^T Sigma_p^{-1} L 계산 (벡터화)
+        L_reshaped = L.view(K, m)  # 크기: [K, m]
+        L_Sigma_p_inv_L = torch.sum((L_reshaped @ B_inv) * L_reshaped)
+
+        # 5. 트레이스 항목 계산
+        tr_term = L_Sigma_p_inv_L + epsilon * K * tr_B_inv
+
+        # 6. 마할라노비스 거리 계산 (벡터화)
+        delta_mu = mu_p - mu_q
+        delta_mu_reshaped = delta_mu.view(K, m)  # 크기: [K, m]
+        mahalanobis = torch.sum((delta_mu_reshaped @ B_inv) * delta_mu_reshaped)
+
+        # 7. KL 발산 계산
+        kl_div = 0.5 * (log_det_Sigma_p - log_det_Sigma_q - k + tr_term + mahalanobis)
+
+        return kl_div
 
 # class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
 #     def __init__(self,
