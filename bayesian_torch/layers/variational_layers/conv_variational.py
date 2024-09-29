@@ -458,6 +458,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
 
         kernel_size = get_kernel_size(kernel_size, 2)
         weight_size = out_channels * (in_channels // groups) * kernel_size[0] * kernel_size[1]
+        self.weight_size = weight_size
         # self.mu_kernel = Parameter(
         #     torch.Tensor(out_channels, in_channels // groups, kernel_size[0],
         #                  kernel_size[1]))
@@ -493,41 +494,14 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.prior_cov_L.data.copy_(torch.zeros((weight_size, 1)))
         self.prior_cov_D.data.copy_(torch.ones(weight_size))
 
-        self.mu_kernel.data.normal_(mean= 0 , std=0.1)
-        self.L_param.data.normal_(mean= 0, std=0.1)
-        self.D_param.data.normal_(mean= 0, std=0.1)
+        self.mu_kernel.data.normal_(mean= 0 , std=1)
+        self.L_param.data.normal_(mean= 0, std=1)
+        self.D_param.data.normal_(mean= 0, std=1)
 
     def kl_loss(self):
         
         return kl_divergence(self.variational_mvn, self.prior_mvn)
-        # with torch.no_grad():
-        #     L, D = self.get_covariance_param()
-            
-        #     Sigma_p = L @ L.T + torch.diag(D)
-        #     Sigma_q = self.prior_cov_L @ self.prior_cov_L.T + torch.diag(self.prior_cov_D)
-                
-        #     # Dimensionality
-        #     k = self.mu_kernel.shape[0]
-            
-        #     # Compute log determinants using slogdet
-        #     sign_p, logdet_p = torch.linalg.slogdet(Sigma_p)
-        #     sign_q, logdet_q = torch.linalg.slogdet(Sigma_q)
-        
-        #     if sign_p <= 0 or sign_q <= 0:
-        #         print(colored("Warning: Sigma_p or Sigma_q is not positive definite", 'red'))
-        #         return torch.tensor(0.0)
-            
-        #     diff_mu = self.mu_kernel - self.prior_mean
-            
-        #     sigma_q_inv_diff_mu = torch.linalg.solve(Sigma_q, diff_mu.unsqueeze(-1))
-        #     mahalanobis_term = torch.matmul(diff_mu.unsqueeze(0), sigma_q_inv_diff_mu).item()
-            
-        #     sigma_q_inv_sigma_p = torch.linalg.solve(Sigma_q, Sigma_p)
-        #     trace_term = torch.trace(sigma_q_inv_sigma_p)
-            
-        #     return 0.5 * (logdet_q - logdet_p - k + trace_term + mahalanobis_term)
-    
-
+       
     def get_covariance_param(self):
         
         return self.L_param, F.softplus(self.D_param.expand_as(self.mu_kernel))
@@ -561,7 +535,8 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         if return_kl:
            
             kl = kl_weight
-            
+            # Normalize KLD by the number of parameters in the layer as like in the original implementation (class Conv2dReparameterization)
+            kl /= self.weight_size
             return out, kl
             
         return out
