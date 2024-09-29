@@ -262,10 +262,7 @@ class ResNet_multivariate(nn.Module):
         # self.linear = LinearReparameterization(64//div, num_classes)
         # print(colored(f"Linear layer is variational", 'red'))
         
-        # self.apply(_weights_init)
-        
         self.debug = False
-        self.my_kld = 0 
         
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
@@ -278,8 +275,6 @@ class ResNet_multivariate(nn.Module):
     def forward(self, x):
         kl_sum = 0
         out, kl = self.conv1(x)
-        if self.debug:
-            print(colored(f"kl of self.conv1: {kl}", 'red'))
         kl_sum += kl
         out = self.bn1(out)
         out = F.relu(out)
@@ -287,19 +282,13 @@ class ResNet_multivariate(nn.Module):
         for l in self.layer1:
             out, kl = l(out)
             kl_sum += kl
-            if self.debug:
-                print(colored(f"kl of self.layer1: {kl}", 'red'))
         for l in self.layer2:
             out, kl = l(out)
             kl_sum += kl
-            if self.debug:
-                print(colored(f"kl of self.layer2: {kl}", 'red'))
 
         for l in self.layer3:
             out, kl = l(out)
             kl_sum += kl
-            if self.debug:
-                print(colored(f"kl of self.layer3: {kl}", 'red'))
 
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
