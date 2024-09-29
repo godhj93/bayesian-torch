@@ -1,4 +1,5 @@
 from bayesian_torch.layers.variational_layers.conv_variational import Conv2dReparameterization_Multivariate, Conv2dReparameterization
+from bayesian_torch.layers.variational_layers.linear_variational import LinearReparameterization
 import torch.nn as nn
 import torch.nn.functional as F
 from bayesian_torch.models.bayesian.resnet_variational import BasicBlock
@@ -159,8 +160,44 @@ class LeNet5_multi(LeNet5_uni):
         self.conv1 = Conv2dReparameterization_Multivariate(1, 6, 5, 1)
         self.conv2 = Conv2dReparameterization_Multivariate(6, 16, 5, 1)
         self.conv3 = Conv2dReparameterization_Multivariate(16, 120, 5, 1)
-        self.fc1 = nn.Linear(120, 84)
-        self.fc2 = nn.Linear(84, 10)
+        # self.fc1 = nn.Linear(120, 84)
+        # self.fc2 = nn.Linear(84, 10)
+        
+        self.fc1 = LinearReparameterization(120, 84)
+        self.fc2 = LinearReparameterization(84, 10)
+        print(colored(f"Linear layer is variational", 'red'))
+        
+    def forward(self, x):
+            
+            with torch.no_grad():
+                x = self.resize(x)
+            
+            kl_sum = 0
+            
+            x, kl = self.conv1(x)
+            kl_sum += kl
+            x = F.tanh(x)
+            x = F.avg_pool2d(x, 2, 2)
+            
+            x, kl = self.conv2(x)
+            kl_sum += kl
+            x = F.tanh(x)
+            x = F.avg_pool2d(x, 2, 2)
+            
+            x, kl = self.conv3(x)
+            kl_sum += kl
+            x = F.tanh(x)
+            
+            x = x.view(-1, 120)
+            
+            x, kl = self.fc1(x)
+            kl_sum += kl
+            x = F.tanh(x)
+            
+            x, kl = self.fc2(x)
+            kl_sum += kl
+
+            return x, kl_sum
         
 class VGG7(nn.Module):
     
@@ -222,7 +259,13 @@ class ResNet_multivariate(nn.Module):
         self.linear = nn.Linear(64//div, num_classes)
         print(colored(f"Linear layer is not variational", 'red'))
         
+        # self.linear = LinearReparameterization(64//div, num_classes)
+        # print(colored(f"Linear layer is variational", 'red'))
+        
         # self.apply(_weights_init)
+        
+        self.debug = False
+        self.my_kld = 0 
         
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
@@ -235,33 +278,35 @@ class ResNet_multivariate(nn.Module):
     def forward(self, x):
         kl_sum = 0
         out, kl = self.conv1(x)
-
+        if self.debug:
+            print(colored(f"kl of self.conv1: {kl}", 'red'))
         kl_sum += kl
         out = self.bn1(out)
         out = F.relu(out)
 
         for l in self.layer1:
             out, kl = l(out)
-    
             kl_sum += kl
-        
-
+            if self.debug:
+                print(colored(f"kl of self.layer1: {kl}", 'red'))
         for l in self.layer2:
             out, kl = l(out)
-    
             kl_sum += kl
+            if self.debug:
+                print(colored(f"kl of self.layer2: {kl}", 'red'))
 
         for l in self.layer3:
             out, kl = l(out)
-    
             kl_sum += kl
-
+            if self.debug:
+                print(colored(f"kl of self.layer3: {kl}", 'red'))
 
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
+        
         out = self.linear(out)
-
-        kl_sum += kl
+        # kl_sum += kl ## It must be enabled if the linear layer is variational
+        
         return out, kl_sum
     
 
