@@ -123,6 +123,7 @@ def test_BNN(model, test_loader, mc_runs, bs, device, moped=False):
     total = 0
     nll_total = []
     kl_total = []
+    
     with torch.no_grad():
         
         for data, target in test_loader:
@@ -317,6 +318,11 @@ def get_model(args, distill=False):
     if args.data == 'mnist' and args.model == 'resnet20':
         model.conv1 = Conv2dReparameterization(1, 16, 3, 1, 1) if args.type == 'uni' else Conv2dReparameterization_Multivariate(1, 16, 3, 1, 1)
         print(colored(f"{args.type} Conv1 input channel is changed to 1", 'red'))
+    
+    elif args.data =='cifar' and args.model == 'lenet':
+        model.conv1 = Conv2dReparameterization(3, 6, 5, 1, 0) if args.type == 'uni' else Conv2dReparameterization_Multivariate(3, 6, 5, 1, 0)
+        print(colored(f"{args.type} Conv1 input channel is changed to 3", 'red'))
+        
     else:
         pass
     return model
@@ -331,12 +337,12 @@ def get_dataset(args):
             transforms.RandomHorizontalFlip(),
             transforms.RandomVerticalFlip(),
             transforms.ToTensor(),
-            # transforms.Normalize((0.1307,), (0.3081,))
+            transforms.Normalize((0.1307,), (0.3081,))
         ])
         transform_test = transforms.Compose([
             # transforms.Resize((32, 32)),
             transforms.ToTensor(),
-            # transforms.Normalize((0.1307,), (0.3081,))
+            transforms.Normalize((0.1307,), (0.3081,))
         ])
         
         train_dataset = datasets.MNIST(root='./data/', train=True, transform=trasform_train, download=True)
