@@ -82,14 +82,14 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
         acc_test, nll, kl = test_BNN(model, test_loader, mc_runs, bs, device, args.moped)
         print(colored(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}", 'yellow'))
         
-        # args.scheduler.step()
+        args.scheduler.step()
         # print(colored(f"Learning rate: {optimizer.param_groups[0]['lr']}", 'red'))
         # Tensorboard
         writer.add_scalar('Train/accuracy', acc, e)
         writer.add_scalar('Train/loss/NLL', np.mean(nll_total), e)
         writer.add_scalar('Train/loss/KL', np.mean(kl_total), e)
         writer.add_scalar('Train/loss/total', np.mean(nll_total) + np.mean(kl_total), e)
-
+        writer.add_scalar('Train/LR', optimizer.param_groups[0]['lr'], e)
         writer.add_scalar('Test/accuracy', acc_test, e)
         writer.add_scalar('Test/loss/NLL', nll, e)
         writer.add_scalar('Test/loss/KL', kl, e)
@@ -204,6 +204,8 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_model.pth'))
             print(colored(f"Best model saved at epoch {e+1}", 'green'))
         
+    torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
+    
 def test_DNN(model, test_loader):
 
     model.cuda()
