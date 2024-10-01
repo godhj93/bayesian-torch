@@ -82,7 +82,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
         acc_test, nll, kl = test_BNN(model, test_loader, mc_runs, bs, device, args.moped)
         print(colored(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}", 'yellow'))
         
-        args.scheduler.step()
+        # args.scheduler.step()
         # print(colored(f"Learning rate: {optimizer.param_groups[0]['lr']}", 'red'))
         # Tensorboard
         writer.add_scalar('Train/accuracy', acc, e)
