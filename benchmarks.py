@@ -66,7 +66,8 @@ def main(args):
         # ece, auroc, aupr = ece_and_ood(test_loader, test_loader, model, device, args)
         # print(colored(f'Accuracy: {acc:.5f}, NLL: {nll:.5f}, KL: {kl:.5f}, ECE: {ece:.5f}, AUROC: {auroc:.5f}, AUPR: {aupr:.5f}', 'green'))
         
-        thresholds = np.linspace(0.1, 1.0, 99)
+        thresholds = np.linspace(0.1, 1.0, 91)
+        print(thresholds)
         tpr = []  # True Positive Rate
         fpr = []  # False Positive Rate
         
@@ -108,7 +109,6 @@ def test_ood_detection(model, in_loader, out_loader, threshold):
                 
                 output, _ = model(images.cuda())
                 outputs.append(output)
-                
             outputs = torch.stack(outputs, dim=0).mean(dim=0)
             softmax_probs = nn.Softmax(dim=1)(outputs)
             max_probs, _ = torch.max(softmax_probs, dim=1)
@@ -145,7 +145,7 @@ def ece_and_ood(id_loader, ood_loader, model, device, args):
     # ID와 OOD 데이터를 저장할 리스트
     id_scores = []
     ood_scores = []
-
+    ece_scores = []
     # ID 데이터에 대한 예측 수행
     with torch.no_grad():
         for i, (x, y) in enumerate(id_loader):
@@ -158,6 +158,7 @@ def ece_and_ood(id_loader, ood_loader, model, device, args):
             logits = torch.stack(outputs, dim=0).mean(dim=0)
             # ECE 계산 (ID 데이터만 사용)
             ece = expected_calibration_error(logits, y, n_bins=15)
+            ece_scores.append(ece)
             # Softmax를 통해 최대 확률 값을 얻어 ID 점수로 사용
             max_prob = torch.max(torch.softmax(logits, dim=1), dim=1).values
             id_scores.extend(max_prob.cpu().tolist())
@@ -198,7 +199,7 @@ def ece_and_ood(id_loader, ood_loader, model, device, args):
     plt.plot([0, 1], [0, 1], linestyle='--', color='gray', label='Random Chance')
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('ROC Curve')
+    plt.title(f'ROC Curve, ECE: {np.mean(ece_scores):.4f}')
     plt.legend(loc='lower right')
     plt.grid(True)
     plt.savefig('roc_curve.png')
@@ -267,6 +268,7 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, default='cifar', help='Dataset to train on [mnist, cifar]')
     parser.add_argument('--weight', type=str, help='Path to load weights')
     parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
+    parser.add_argument('--martern', action='store_true', help='Use Marternal')
     args = parser.parse_args()
     
     '''
