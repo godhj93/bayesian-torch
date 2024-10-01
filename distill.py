@@ -8,75 +8,86 @@ import numpy as np
 import copy 
 from torch.nn import functional as F
 import torch
-
-def distill(dnn, bnn, steps, writer, alpha, device = 'cuda'):
+import os 
+def distill(dnn, bnn, steps, writer, alpha, args, device = 'cuda'):
     
     bnn_good_prior = copy.deepcopy(bnn)
-    
     dnn_conv_layers = get_conv_layers(dnn)
     bnn_conv_layers = get_conv_layers(bnn)
     
-    MSE = nn.MSELoss()
+    # Check the precomputed prior exists
+    if os.path.exists(args.weight.replace('best_model.pth', f"Distilled_BNN.pt")):
+        
+        print(colored(f"Loading distilled BNN from {args.weight.replace('best_model.pth', f'Distilled_BNN.pt')}", 'red'))
+        ckpt = torch.load(args.weight.replace('best_model.pth', f"Distilled_BNN.pt"))
+        bnn_good_prior.load_state_dict(ckpt)
+        return bnn_good_prior
+      
+    else:
+        MSE = nn.MSELoss()
 
-    optimizer = Adam(bnn.parameters(), lr = 0.001)
-    
-    pbar = tqdm(enumerate(range(steps)), total = steps)
-    for idx, _ in pbar:
+        optimizer = Adam(bnn.parameters(), lr = 0.001)
         
-        loss = 0
+        pbar = tqdm(enumerate(range(steps)), total = steps)
+        for idx, _ in pbar:
             
-        for dnn_layer, bnn_layer in zip(dnn_conv_layers, bnn_conv_layers):
-            # print(f"Distilling from {dnn_layer} to {bnn_layer}")
-            w_dnn = dnn_layer.weight.data.view(-1).to(device)
-            
-            mu_flat = bnn_layer.mu_kernel.view(-1).to(device)
-            
-            L, D = bnn_layer.get_covariance_param()
-            
-            L, D = L.to(device), D.to(device)
-            
-            # Check var is on the same device 
-            w_sample = LowRankMultivariateNormal(mu_flat, L, D).rsample().reshape(w_dnn.size())
-            
-            
-            loss += MSE(w_sample, w_dnn)  +  alpha / L.norm(p=1)
-            
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-            
-        pbar.set_description(f"Distillation Loss: {loss.item():.2f}, alpha: {alpha:.2f}")
-            
-        writer.add_scalar('Distillation Loss', loss.item(), idx)
-            
-    # Set the prior and variational parameters 
-    bnn_good_prior_conv_layers = get_conv_layers(bnn_good_prior)
-    bnn_good_prior_linear_layers = get_linear_layers(bnn_good_prior)
-    dnn_linear_layers = get_linear_layers(dnn)
-    
-    for bnn_layer, bnn_good_prior_layer in zip(bnn_conv_layers, bnn_good_prior_conv_layers):
+            loss = 0
+                
+            for dnn_layer, bnn_layer in zip(dnn_conv_layers, bnn_conv_layers):
+                # print(f"Distilling from {dnn_layer} to {bnn_layer}")
+                w_dnn = dnn_layer.weight.data.view(-1).to(device)
+                
+                mu_flat = bnn_layer.mu_kernel.view(-1).to(device)
+                
+                L, D = bnn_layer.get_covariance_param()
+                
+                L, D = L.to(device), D.to(device)
+                
+                # Check var is on the same device 
+                w_sample = LowRankMultivariateNormal(mu_flat, L, D).rsample().reshape(w_dnn.size())
+                
+                
+                loss += MSE(w_sample, w_dnn)  +  alpha / L.norm(p=1)
+                
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+                
+            pbar.set_description(f"Distillation Loss: {loss.item():.2f}, alpha: {alpha:.2f}")
+                
+            writer.add_scalar('Distillation Loss', loss.item(), idx)
+                
+        # Set the prior and variational parameters 
+        bnn_good_prior_conv_layers = get_conv_layers(bnn_good_prior)
+        bnn_good_prior_linear_layers = get_linear_layers(bnn_good_prior)
+        dnn_linear_layers = get_linear_layers(dnn)
         
-        bnn_good_prior_layer.distill = True
-        # Set the prior
-        bnn_good_prior_layer.prior_mean = bnn_layer.mu_kernel.detach().clone().flatten()
-        # print(colored(f"Disabled copying of prior mean", 'red'))
-        bnn_good_prior_layer.prior_cov_L = bnn_layer.get_covariance_param()[0].detach()
-        bnn_good_prior_layer.prior_cov_D = bnn_layer.get_covariance_param()[1].detach()
-        
-        # Set the variational parameters
-        # bnn_good_prior_layer.mu_kernel = bnn_layer.mu_kernel
-        # bnn_good_prior_layer.L_param.data = bnn_layer.get_covariance_param()[0].detach().clone()
-        # bnn_good_prior_layer.B.data = bnn_layer.get_covariance_param()[1].detach().clone()
-        
-    print(colored(f"Disabled copying weights from DNN to BNN", 'red'))
-    # for dnn_layer, bnn_good_prior_layer in zip(dnn_linear_layers, bnn_good_prior_linear_layers):
-        
-    #     # Set the prior
-    #     bnn_good_prior_layer.weight.data = dnn_layer.weight.data.clone()
-    #     print(colored(f"Linear weight copied from DNN to BNN", 'red'))
-        
-    # Save the model
-    return bnn_good_prior
+        for bnn_layer, bnn_good_prior_layer in zip(bnn_conv_layers, bnn_good_prior_conv_layers):
+            
+            bnn_good_prior_layer.distill = True
+            # Set the prior
+            bnn_good_prior_layer.prior_mean = bnn_layer.mu_kernel.detach().clone().flatten()
+            # print(colored(f"Disabled copying of prior mean", 'red'))
+            bnn_good_prior_layer.prior_cov_L = bnn_layer.get_covariance_param()[0].detach()
+            bnn_good_prior_layer.prior_cov_D = bnn_layer.get_covariance_param()[1].detach()
+            
+            # Set the variational parameters
+            # bnn_good_prior_layer.mu_kernel = bnn_layer.mu_kernel
+            # bnn_good_prior_layer.L_param.data = bnn_layer.get_covariance_param()[0].detach().clone()
+            # bnn_good_prior_layer.B.data = bnn_layer.get_covariance_param()[1].detach().clone()
+            
+        print(colored(f"Disabled copying weights from DNN to BNN", 'red'))
+        # for dnn_layer, bnn_good_prior_layer in zip(dnn_linear_layers, bnn_good_prior_linear_layers):
+            
+        #     # Set the prior
+        #     bnn_good_prior_layer.weight.data = dnn_layer.weight.data.clone()
+        #     print(colored(f"Linear weight copied from DNN to BNN", 'red'))
+            
+        # Save the model
+        path_to_save = args.weight.replace('best_model.pth', f"Distilled_BNN.pt")
+        torch.save(bnn_good_prior.state_dict(), path_to_save)
+        print(colored(f"Distilled BNN saved at {path_to_save}", 'blue'))
+        return bnn_good_prior
 
 
 def set_martern_prior(dnn, bnn, device = 'cuda'):
