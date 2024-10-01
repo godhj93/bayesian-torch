@@ -513,7 +513,6 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         if self.dnn_to_bnn_flag:
             return_kl = False
 
-        # D_param = F.softplus(self.D_param.expand_as(self.mu_kernel))
         D_param = F.softplus(self.D_param.expand_as(self.mu_kernel))
         self.variational_mvn = LowRankMultivariateNormal(self.mu_kernel, self.L_param, D_param)
         
