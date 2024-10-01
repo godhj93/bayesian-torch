@@ -505,6 +505,149 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         
         return kl_divergence(self.variational_mvn, self.prior_mvn)
        
+    def martern_cov_kl_loss2(self, B, n, L, d, mu_q):
+        '''
+        B: Block matrix (torch.Tensor of shape (m, m))
+        n: The number of blocks in the block diagonal matrix Sigma_p
+        L: Covariance factor matrix of q (torch.Tensor of shape (k, D))
+        d: Scalar value representing the diagonal elements of D (since D = d * I_D)
+        mu_q: Mean vector of q (torch.Tensor of shape (D,))
+        '''
+        
+        # Ensure all inputs are on the same device (e.g., GPU if available)
+        device = B.device
+        L = L.to(device)
+        k = L.shape[0]
+        mu_q = mu_q.to(device)
+
+        # Inverse of B
+        B_inv = torch.inverse(B)
+        # Trace of B_inv
+        tr_B_inv = torch.trace(B_inv)
+
+        # Total dimension D (should be equal to n * m)
+        D_total = mu_q.shape[0]
+        # Size of each block in B (assuming B is square)
+        m = B.shape[0]
+        # Ensure that D_total equals n times m
+        assert D_total == n * m, "Dimension mismatch: D_total should be n * m"
+
+        # Initialize terms
+        Term1 = 0.0  # Sum of Tr(B_inv @ L_i.T @ L_i) over i
+        Term2 = 0.0  # Sum of mu_q_i.T @ B_inv @ mu_q_i over i
+
+        # Loop over each block
+        for i in range(n):
+            # Indices for the current block
+            start_idx = i * m
+            end_idx = (i + 1) * m
+
+            # Extract L_i (shape: k x m)
+            L_i = L[:, start_idx:end_idx]
+            # Compute Tr(B_inv @ L_i.T @ L_i)
+            term1_i = torch.trace(B_inv @ (L_i.t() @ L_i))
+            Term1 += term1_i
+
+            # Extract mu_q_i (shape: m,)
+            mu_q_i = mu_q[start_idx:end_idx]
+            # Compute mu_q_i.T @ B_inv @ mu_q_i
+            term2_i = mu_q_i @ B_inv @ mu_q_i
+            Term2 += term2_i
+
+        # Compute Term3: d * n * Tr(B_inv)
+        Term3 = d * n * tr_B_inv
+
+        # Compute constants
+        term_const = -D_total + n * torch.logdet(B) - D_total * torch.log(d)
+
+        # Compute the log-determinant term
+        # LLT is L @ L.T (shape: k x k)
+        LLT = L @ L.t()
+        # Compute the determinant of (I_k + (1/d) * LLT)
+        k = L.shape[0]
+        I_k = torch.eye(k, device=device)  # Identity matrix of size k x k
+        det_term_matrix = I_k + (1 / d) * LLT
+        # Compute the log-determinant
+        term_logdet = torch.logdet(det_term_matrix)
+
+        # Final KL divergence calculation
+        kl = 0.5 * (Term1 + Term2 + Term3 + term_const - term_logdet)
+
+        return kl
+        
+    def martern_cov_kl_loss(self, B, n, L, d, mu_q):
+        '''
+        B: Block matrix (torch.Tensor of shape (m, m))
+        n: The number of blocks in the block diagonal matrix Sigma_p
+        L: Covariance factor matrix of q (torch.Tensor of shape (k, D))
+        d: Scalar value representing the diagonal elements of D (since D = d * I_D)
+        mu_q: Mean vector of q (torch.Tensor of shape (D,))
+        '''
+        # Ensure all inputs are on the same device (e.g., GPU if available)
+        device = B.device
+        L = L.to(device)
+        mu_q = mu_q.to(device)
+        
+        # Inverse of B
+        B_inv = torch.inverse(B)
+        # Trace of B_inv
+        tr_B_inv = torch.trace(B_inv)
+        
+        # Total dimension D (should be equal to n * m)
+        D_total = mu_q.shape[0]
+        # Size of each block in B (assuming B is square)
+        m = B.shape[0]
+        # Ensure that D_total equals n times m
+        assert D_total == n * m, f"Dimension mismatch: D_total ({D_total}) should be n ({n}) * m ({m})"
+        k = L.shape[0]  # Rank of L
+        
+        # Reshape and permute L to shape (n, k, m)
+        L = L.view(k, n, m).permute(1, 0, 2)  # Now L has shape (n, k, m)
+        
+        # Compute L_i.t() @ L_i for all i
+        L_i_t = L.permute(0, 2, 1)  # Shape: (n, m, k)
+        L_i_t_L_i = torch.bmm(L_i_t, L)  # Shape: (n, m, m)
+        
+        # Expand B_inv to shape (n, m, m)
+        B_inv_expanded = B_inv.unsqueeze(0).expand(n, m, m)
+        
+        # Compute B_inv @ (L_i.t() @ L_i) for all i
+        term1_matrices = torch.bmm(B_inv_expanded, L_i_t_L_i)  # Shape: (n, m, m)
+        
+        # Compute term1_i by summing the diagonal elements
+        term1_i = term1_matrices.diagonal(dim1=1, dim2=2).sum(-1)  # Shape: (n,)
+        Term1 = term1_i.sum()
+        
+        # Reshape mu_q to shape (n, m)
+        mu_q = mu_q.view(n, m)
+        
+        # Compute mu_q_i @ B_inv for all i
+        mu_q_B_inv = mu_q @ B_inv  # Shape: (n, m)
+        
+        # Compute term2_i
+        term2_i = (mu_q_B_inv * mu_q).sum(-1)  # Shape: (n,)
+        Term2 = term2_i.sum()
+        
+        # Compute Term3: d * n * Tr(B_inv)
+        Term3 = d * n * tr_B_inv
+        
+        # Compute constants
+        term_const = -D_total + n * torch.logdet(B) - D_total * torch.log(d)
+        
+        # Compute the log-determinant term
+        # LLT is L @ L.T (shape: k x k)
+        L_flat = L.permute(1, 0, 2).reshape(k, -1)  # Flatten L back to shape (k, D_total)
+        LLT = L_flat @ L_flat.t()  # Shape: (k, k)
+        # Compute the determinant of (I_k + (1/d) * LLT)
+        I_k = torch.eye(k, device=device)  # Identity matrix of size k x k
+        det_term_matrix = I_k + (1 / d) * LLT
+        # Compute the log-determinant
+        term_logdet = torch.logdet(det_term_matrix)
+        
+        # Final KL divergence calculation
+        kl = 0.5 * (Term1 + Term2 + Term3 + term_const - term_logdet)
+        
+        return kl
     def get_covariance_param(self):
         
         return self.L_param, F.softplus(self.D_param.expand_as(self.mu_kernel))
@@ -527,7 +670,14 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         if return_kl:
             
             if self.martern_prior:
-                kl_weight = self.kl_divergence_block_diagonal_and_low_rank(self.mu_kernel, self.prior_mean, self.BLOCK_MAT, self.L_param, F.softplus(self.D_param))
+                kl_weight = self.martern_cov_kl_loss(
+                    B = self.BLOCK_MAT,
+                    n = self.in_channels * self.out_channels,
+                    L = self.L_param.T,
+                    d = F.softplus(self.D_param),
+                    mu_q = self.mu_kernel.view(-1)
+                )
+                
             else:
                 kl_weight = kl_divergence(self.variational_mvn, self.prior_mvn)
        
