@@ -25,7 +25,7 @@ def main(args):
         dnn_model.load_state_dict(torch.load(args.weight))
         print(colored(f"Distilling from {args.weight}", 'green'))
         print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
-        model = distill(dnn_model, model, steps = 10000, args = args, alpha= args.alpha, device = device, writer = writer)
+        model = distill(dnn_model, model, steps = 1000, args = args, alpha= args.alpha, device = device, writer = writer)
         
     if args.martern:
         dnn_model = get_model(args, distill=True)
@@ -38,7 +38,7 @@ def main(args):
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
     
     # Learning rate scheduler
-    args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[50, 75], gamma=0.1)
+    args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[args.epochs], gamma=1.0) # Never decay the learning rate
     
     if args.type == 'dnn':
         train_DNN(epoch = args.epochs, 

@@ -16,7 +16,7 @@ def distill(dnn, bnn, steps, writer, alpha, args, device = 'cuda'):
     bnn_conv_layers = get_conv_layers(bnn)
     
     # Check the precomputed prior exists
-    if os.path.exists(args.weight.replace('best_model.pth', f"Distilled_BNN.pt")):
+    if os.path.exists(args.weight.replace('best_model.pth', f"Distilled_BNN_0.0.pt")):
         
         print(colored(f"Loading distilled BNN from {args.weight.replace('best_model.pth', f'Distilled_BNN.pt')}", 'red'))
         ckpt = torch.load(args.weight.replace('best_model.pth', f"Distilled_BNN.pt"))
@@ -84,7 +84,7 @@ def distill(dnn, bnn, steps, writer, alpha, args, device = 'cuda'):
         #     print(colored(f"Linear weight copied from DNN to BNN", 'red'))
             
         # Save the model
-        path_to_save = args.weight.replace('best_model.pth', f"Distilled_BNN.pt")
+        path_to_save = args.weight.replace('best_model.pth', f"Distilled_BNN_{alpha}.pt")
         torch.save(bnn_good_prior.state_dict(), path_to_save)
         print(colored(f"Distilled BNN saved at {path_to_save}", 'blue'))
         return bnn_good_prior

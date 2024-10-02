@@ -651,7 +651,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         return kl
     def get_covariance_param(self):
         
-        return self.L_param, self.D_param.expand_as(self.mu_kernel)
+        return self.L_param, self.D_param.expand_as(self.mu_kernel).to(self.L_param.device)
         
     def forward(self, input, return_kl=True):
         if self.dnn_to_bnn_flag:
