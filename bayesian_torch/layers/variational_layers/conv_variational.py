@@ -466,7 +466,8 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         rank = 1
         self.mu_kernel = Parameter(torch.Tensor(weight_size))
         self.L_param = Parameter(torch.Tensor(weight_size, rank))
-        self.D_param = Parameter(torch.Tensor(1))
+        # self.D_param = Parameter(torch.Tensor(1))
+        self.D_param = torch.ones_like(self.mu_kernel) * 1e-10
         
         self.register_buffer(
             'prior_mean',
@@ -497,9 +498,9 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.prior_cov_L.data.copy_(torch.zeros((weight_size, 1)))
         self.prior_cov_D.data.copy_(torch.ones(weight_size))
 
-        self.mu_kernel.data.normal_(mean= 0 , std=1)
-        self.L_param.data.normal_(mean= 0, std=1)
-        self.D_param.data.normal_(mean= 0, std=1)
+        self.mu_kernel.data.normal_(mean= 0 , std=0.1)
+        self.L_param.data.normal_(mean= 0, std=0.1)
+        # self.D_param.data.normal_(mean= 0, std=0.1)
 
     def kl_loss(self):
         
@@ -650,7 +651,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         return kl
     def get_covariance_param(self):
         
-        return self.L_param, F.softplus(self.D_param.expand_as(self.mu_kernel))
+        return self.L_param, self.D_param.expand_as(self.mu_kernel)
         
     def forward(self, input, return_kl=True):
         if self.dnn_to_bnn_flag:
