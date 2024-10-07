@@ -16,7 +16,7 @@ def distill(dnn, bnn, steps, writer, alpha, args, device = 'cuda'):
     bnn_conv_layers = get_conv_layers(bnn)
     
     # Check the precomputed prior exists
-    if os.path.exists(args.weight.replace('best_model.pth', f"Distilled_BNN_0.0.pt")):
+    if os.path.exists(args.weight.replace('best_model.pth', f"Distilled_BNN_3210.0.pt")):
         
         print(colored(f"Loading distilled BNN from {args.weight.replace('best_model.pth', f'Distilled_BNN.pt')}", 'red'))
         ckpt = torch.load(args.weight.replace('best_model.pth', f"Distilled_BNN.pt"))
@@ -26,7 +26,7 @@ def distill(dnn, bnn, steps, writer, alpha, args, device = 'cuda'):
     else:
         MSE = nn.MSELoss()
 
-        optimizer = Adam(bnn.parameters(), lr = 0.001)
+        optimizer = Adam(bnn.parameters(), lr = 0.01)
         
         pbar = tqdm(enumerate(range(steps)), total = steps)
         for idx, _ in pbar:
