@@ -497,7 +497,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
 
         self.mu_kernel.data.normal_(mean= 0 , std=0.1)
         self.L_param.data.normal_(mean= 0, std=0.1)
-        # self.D_param.data.normal_(mean= 0, std=0.1)
+        self.D_param.data.normal_(mean= 0, std=0.1)
 
     def kl_loss(self):
         
@@ -505,7 +505,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
        
     def get_covariance_param(self):
         
-        return self.L_param, self.D_param.expand_as(self.mu_kernel).to(self.L_param.device)
+        return self.L_param, self.D_param.exp().log1p().expand_as(self.mu_kernel).to(self.L_param.device)
         
     def forward(self, input, return_kl=True):
         if self.dnn_to_bnn_flag:
@@ -513,7 +513,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
 
         
         L, D = self.get_covariance_param()
-        D = F.softplus(self.D_param.expand_as(self.mu_kernel))
+        # D = F.softplus(self.D_param.expand_as(self.mu_kernel))
         self.variational_mvn = LowRankMultivariateNormal(self.mu_kernel, L, D)
         
         weight = self.variational_mvn.rsample().view(self.out_channels, self.in_channels, self.kernel_size, self.kernel_size)
