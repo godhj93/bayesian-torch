@@ -415,10 +415,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
                  padding=0,
                  dilation=1,
                  groups=1,
-                 prior_mean=0,
-                 prior_variance=1,
-                 posterior_mu_init=0,
-                 posterior_rho_init=-3.0,
+                 rank = 1,
                  bias=True):
         """
         Implements Conv2d layer with reparameterization trick.
@@ -463,11 +460,11 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         #     torch.Tensor(out_channels, in_channels // groups, kernel_size[0],
         #                  kernel_size[1]))
         
-        rank = 1
+        
         self.mu_kernel = Parameter(torch.Tensor(weight_size))
         self.L_param = Parameter(torch.Tensor(weight_size, rank))
-        # self.D_param = Parameter(torch.Tensor(1))
-        self.D_param = torch.ones_like(self.mu_kernel) * 1e-10
+        self.D_param = Parameter(torch.Tensor(1))
+        # self.D_param = torch.ones_like(self.mu_kernel) * 1e-10
         
         self.register_buffer(
             'prior_mean',
@@ -514,8 +511,9 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         if self.dnn_to_bnn_flag:
             return_kl = False
 
-        # D_param = F.softplus(self.D_param.expand_as(self.mu_kernel))
+        
         L, D = self.get_covariance_param()
+        D = F.softplus(self.D_param.expand_as(self.mu_kernel))
         self.variational_mvn = LowRankMultivariateNormal(self.mu_kernel, L, D)
         
         weight = self.variational_mvn.rsample().view(self.out_channels, self.in_channels, self.kernel_size, self.kernel_size)
