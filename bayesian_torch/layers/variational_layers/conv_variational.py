@@ -531,10 +531,10 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
                     B = self.BLOCK_MAT,
                     n = self.in_channels * self.out_channels,
                     L = self.L_param.T,
-                    d = self.D_param[0],
+                    d = self.D_param.exp().log1p(),
                     mu_q = self.mu_kernel.view(-1)
                 )
-                
+                assert not torch.isnan(kl_weight), "KL divergence is NaN"
             else:
                 kl_weight = kl_divergence(self.variational_mvn, self.prior_mvn)
        
