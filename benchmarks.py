@@ -1,14 +1,11 @@
-from models import SimpleCNN, SimpleCNN_uni, SimpleCNN_multi, LeNet5, LeNet5_uni, LeNet5_multi, VGG7, VGG7_uni, VGG7_multi, resnet20_multi
-from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
-from utils import get_model, get_dataset, test_DNN, test_BNN
+from utils import get_model, get_dataset
 import argparse
 from termcolor import colored
 import torch
-import torch.nn.functional as F
 import numpy as np
-from torchmetrics.classification import AveragePrecision
-from sklearn.metrics import roc_auc_score, roc_curve
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+import os 
 
 def main(args):
     
@@ -16,57 +13,33 @@ def main(args):
     # Get the model
     model = get_model(args).to(device)
     model.load_state_dict(torch.load(args.weight))
+    model.eval()
     
-    # Get the dataset
-    _, test_loader = get_dataset(args)
-    args.data = 'tinyimagenet'
-    _, tiny_imagenet_loader = get_dataset(args)
-    # args.data = 'mnist'
-    # _, mnist_loader = get_dataset(args)
-    
-    if args.type == 'dnn':
-        acc, nll = test_DNN(
-            model = model,
-            test_loader = test_loader,
-        )
+    if args.ece:
+        args.bs = 10000
+        print(colored(f"Calculating ECE for {args.bs} data", 'green'))
+        _, test_loader = get_dataset(args)
+
+        ece_scores = []
+        for x,y in tqdm(test_loader):
+            with torch.no_grad():
+                logit_list = []
+                for _ in tqdm(range(args.mc_runs), desc = 'MC Sampling'):
+                    logits, _ = model(x.to(device))
+                    logit_list.append(logits)
+                logits = torch.stack(logit_list, dim=0).mean(dim=0)
+            compute_ece_and_plot_confidence_vs_accuracy_batches(logits, y, args = args, n_bins=15)
+            # ece = expected_calibration_error(logits, y, n_bins=10)
+            # ece_scores.append(ece)
         
-        with torch.no_grad():
-            for i, (x, y) in enumerate(test_loader):
-                outputs = []
-                x, y = x.to(device), y.to(device)
-                for _ in range(args.mc_runs):
-                    logits = model(x)
-                    outputs.append(logits)
-                    
-                logits = torch.stack(outputs, dim=0).mean(dim=0)
-                ece = expected_calibration_error(logits, y, n_bins=15)
-        
-        print(colored(f'Accuracy: {acc:.5f}, NLL: {nll:.5f}, ECE: {ece:.5f}', 'green'))
-        
+        # print(np.mean(ece))
     else:
-        # acc, nll, kl = test_BNN(
-        #     model = model,
-        #     test_loader = test_loader,
-        #     mc_runs = args.mc_runs,
-        #     bs = args.bs,
-        #     device = device   
-        # )
+        # Get the dataset
+        _, test_loader = get_dataset(args)
+        args.data = 'tinyimagenet'
+        _, tiny_imagenet_loader = get_dataset(args)
         
-        # with torch.no_grad():
-        #     for i, (x, y) in enumerate(test_loader):
-        #         outputs = []
-        #         x, y = x.to(device), y.to(device)
-        #         for _ in range(args.mc_runs):
-        #             logits, _ = model(x)
-        #             outputs.append(logits)
-                    
-        #         logits = torch.stack(outputs, dim=0).mean(dim=0)
-        #         ece = expected_calibration_error(logits, y, n_bins=15)
-        
-        # ece, auroc, aupr = ece_and_ood(test_loader, test_loader, model, device, args)
-        # print(colored(f'Accuracy: {acc:.5f}, NLL: {nll:.5f}, KL: {kl:.5f}, ECE: {ece:.5f}, AUROC: {auroc:.5f}, AUPR: {aupr:.5f}', 'green'))
-        
-        thresholds = np.linspace(0.1, 1.0, 91)
+        thresholds = np.linspace(0.01, 1.0, 100)
         print(thresholds)
         tpr = []  # True Positive Rate
         fpr = []  # False Positive Rate
@@ -101,9 +74,9 @@ def test_ood_detection(model, in_loader, out_loader, threshold):
     model.eval().cuda()
     in_distribution_scores = []
     out_distribution_scores = []
-
+    
     with torch.no_grad():
-        for images, _ in in_loader:
+        for images, targets in tqdm(in_loader, desc='In-distribution'):
             outputs = []
             for _ in range(args.mc_runs):
                 
@@ -117,7 +90,7 @@ def test_ood_detection(model, in_loader, out_loader, threshold):
     # OOD 데이터 생성 (예: Uniform Noise)
     # ood_data = torch.rand((len(in_distribution_scores), 3, 32, 32))
     with torch.no_grad():
-        for ood_data, _ in out_loader:
+        for ood_data, _ in tqdm(out_loader, desc='Out-of-distribution'):
             outputs = []
             for _ in range(args.mc_runs):
                 output, _ = model(ood_data.cuda())
@@ -141,124 +114,89 @@ def test_ood_detection(model, in_loader, out_loader, threshold):
     print(f'Out-of-distribution samples correctly detected: {out_correct}/{len(out_distribution_scores)}')
     return in_correct, out_correct
 
-def ece_and_ood(id_loader, ood_loader, model, device, args):
-    # ID와 OOD 데이터를 저장할 리스트
-    id_scores = []
-    ood_scores = []
-    ece_scores = []
-    # ID 데이터에 대한 예측 수행
-    with torch.no_grad():
-        for i, (x, y) in enumerate(id_loader):
-            outputs = []
-            x, y = x.to(device), y.to(device)
-            for _ in range(args.mc_runs):
-                logits, _ = model(x)
-                outputs.append(logits)
 
-            logits = torch.stack(outputs, dim=0).mean(dim=0)
-            # ECE 계산 (ID 데이터만 사용)
-            ece = expected_calibration_error(logits, y, n_bins=15)
-            ece_scores.append(ece)
-            # Softmax를 통해 최대 확률 값을 얻어 ID 점수로 사용
-            max_prob = torch.max(torch.softmax(logits, dim=1), dim=1).values
-            id_scores.extend(max_prob.cpu().tolist())
-
-    # OOD 데이터에 대한 예측 수행
-    with torch.no_grad():
-        for i, (x, _) in enumerate(ood_loader):  # OOD 데이터에서는 레이블 사용 안 함
-            outputs = []
-            x = x.to(device)
-            for _ in range(args.mc_runs):
-                logits, _ = model(x)
-                outputs.append(logits)
-
-            logits = torch.stack(outputs, dim=0).mean(dim=0)
-            # Softmax를 통해 최대 확률 값을 얻어 OOD 점수로 사용
-            max_prob = torch.max(torch.softmax(logits, dim=1), dim=1).values
-            ood_scores.extend(max_prob.cpu().tolist())
-
-    # ID와 OOD 점수 결합
-    scores = id_scores + ood_scores
-    labels = [0] * len(id_scores) + [1] * len(ood_scores)  # 0: ID, 1: OOD
-
-    # AUROC 계산
-    auroc = roc_auc_score(labels, scores)
-
-    # AUPR 계산 using torchmetrics
-    aupr_metric = AveragePrecision(task='binary')
-    scores_tensor = torch.tensor(scores)
-    labels_tensor = torch.tensor(labels)
-    aupr = aupr_metric(scores_tensor, labels_tensor).item()
+def compute_ece_and_plot_confidence_vs_accuracy_batches(logits_batches, labels_batches, args, n_bins=15):
+    """
+    여러 배치에 대해 Confidence vs Accuracy 그래프를 그리며, ECE를 계산하는 함수.
     
-    # ROC 곡선 계산 및 그리기
-    fpr, tpr, _ = roc_curve(labels, scores)
-
-    # ROC 곡선 그리기 및 저장
-    plt.figure(figsize=(8, 6))
-    plt.plot(fpr, tpr, label=f'AUROC = {auroc:.4f}', color='blue')
-    plt.plot([0, 1], [0, 1], linestyle='--', color='gray', label='Random Chance')
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title(f'ROC Curve, ECE: {np.mean(ece_scores):.4f}')
-    plt.legend(loc='lower right')
-    plt.grid(True)
-    plt.savefig('roc_curve.png')
-    plt.close()
-
-    return ece, auroc, aupr
-
-def expected_calibration_error(logits, labels, n_bins=15) -> float:
+    logits_batches: logits의 배치 리스트
+    labels_batches: labels의 배치 리스트
+    n_bins: ECE를 계산할 때 사용할 bin의 개수
     """
-    Calculate Expected Calibration Error (ECE).
+    all_confidences = []
+    all_preds = []
+    all_labels = []
 
-    Args:
-    - logits (torch.Tensor): Model's predicted probabilities, shape (N, num_classes).
-    - labels (torch.Tensor): Ground truth labels, shape (N,).
-    - n_bins (int): Number of bins to use for calibration.
+    # 각 배치에 대해 처리
+    # for logits, labels in zip(logits_batches, labels_batches):
+    # softmax를 적용하여 확률로 변환
+    probs = torch.softmax(logits_batches, dim=1)
+    preds = torch.argmax(probs, dim=1)
+    confidences, _ = torch.max(probs, dim=1)
 
-    Returns:
-    - ece (float): The Expected Calibration Error.
-    """
+    # 결과 저장
+    all_confidences.append(confidences.detach().cpu().numpy())
+    all_preds.append(preds.detach().cpu().numpy())
+    all_labels.append(labels_batches.detach().cpu().numpy())
 
-    # Get the predicted probabilities and the corresponding predicted labels
-    y_hat = F.softmax(logits, dim=1)
-    confidences, predicted_labels = torch.max(y_hat, 1)
+    # numpy 배열로 변환
+    all_confidences = np.concatenate(all_confidences)
+    all_preds = np.concatenate(all_preds)
+    all_labels = np.concatenate(all_labels)
 
-    # Convert to numpy for easier handling
-    confidences = confidences.detach().cpu().numpy()
-    predicted_labels = predicted_labels.detach().cpu().numpy()
-    labels = labels.detach().cpu().numpy()
-
-    # Initialize bins
+    # Confidence bins 설정
     bin_boundaries = np.linspace(0, 1, n_bins + 1)
-    bin_lowers = bin_boundaries[:-1]
-    bin_uppers = bin_boundaries[1:]
+    accuracy_per_bin = []
+    avg_confidence_per_bin = []
 
+    for i in range(n_bins):
+        bin_lower = bin_boundaries[i]
+        bin_upper = bin_boundaries[i + 1]
+
+        # 현재 bin에 속하는 샘플들을 선택
+        bin_mask = (all_confidences > bin_lower) & (all_confidences <= bin_upper)
+        bin_size = np.sum(bin_mask)
+
+        if bin_size > 0:
+            # bin 내에서 정확도와 평균 확신도 계산
+            accuracy = np.mean(all_preds[bin_mask] == all_labels[bin_mask])
+            avg_confidence = np.mean(all_confidences[bin_mask])
+            accuracy_per_bin.append(accuracy)
+            avg_confidence_per_bin.append(avg_confidence)
+        else:
+            accuracy_per_bin.append(0)
+            avg_confidence_per_bin.append((bin_lower + bin_upper) / 2)
+
+    # ECE 계산
     ece = 0.0
+    for acc, conf, bin_size in zip(accuracy_per_bin, avg_confidence_per_bin, np.diff(bin_boundaries)):
+        ece += np.abs(conf - acc) * bin_size
 
-    # Calculate accuracy and confidence within each bin
-    for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
-        # Find indices where confidence is within the current bin range
-        in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
-        prop_in_bin = np.mean(in_bin)
-
-        if prop_in_bin > 0:
-            accuracy_in_bin = np.mean(predicted_labels[in_bin] == labels[in_bin])
-            avg_confidence_in_bin = np.mean(confidences[in_bin])
-            
-            # Calculate ECE contribution for the current bin
-            ece += np.abs(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
+    # 그래프 그리기
+    plt.figure(figsize=(8, 6))
+    plt.plot(avg_confidence_per_bin, accuracy_per_bin, marker='o', label="Model Calibration")
+    plt.plot([0, 1], [0, 1], linestyle='--', color='gray', label="Perfect Calibration")
+    plt.xlabel('Confidence')
+    plt.ylabel('Accuracy')
+    plt.title(f'Confidence vs Accuracy (ECE: {ece:.4f})')
+    plt.legend()
+    plt.grid(True)
+    save_dir = os.path.dirname(args.weight)
+    save_path = os.path.join(save_dir, f'ece_{ece:.4f}_in_n_bins_{n_bins}.png')
+    plt.savefig(save_path, dpi=300)
+    plt.show()
+    
+    print(colored(f"The figure is saved at {save_path}", 'green'))
 
     return ece
-    
-    
+
     
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Bayesian Neural Networks Benchmarks')
     parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20]')
     parser.add_argument('--type', type=str, default='multi', help='Type of model [dnn, uni, multi]')
-    parser.add_argument('--bs', type=int, default=1024, help='Batch size')
+    parser.add_argument('--bs', type=int, default=10000, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--mc_runs', type=int, default=50, help='Number of Monte Carlo runs')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train')
@@ -269,6 +207,7 @@ if __name__ == '__main__':
     parser.add_argument('--weight', type=str, help='Path to load weights')
     parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
     parser.add_argument('--martern', action='store_true', help='Use Marternal')
+    parser.add_argument('--ece', action='store_true', help='Calculate ECE')
     args = parser.parse_args()
     
     '''
