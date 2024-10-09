@@ -1,6 +1,6 @@
 import torch
 from utils import train_DNN, train_BNN, get_model, get_dataset, test_DNN
-from distill import distill, set_martern_prior
+from distill import distill, set_martern_prior, Multivariate_MOPED
 import argparse
 from torch.utils.tensorboard import SummaryWriter
 import datetime
@@ -14,12 +14,37 @@ def main(args):
     model = get_model(args)
     
     train_loader, test_loader = get_dataset(args)
-
+        
+    # 현재 날짜와 시간을 포맷팅
     date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    # log_path = 'runs/{}/{}/{}/bs{}_lr{}_mc{}_temp_{}_ep{}_kd_{}_martern_{}_alpha_{}_moped_{}_{}'.format(args.data, args.model, args.type, args.bs, args.lr, args.mc_runs, args.t, args.epochs, args.distill, args.martern, args.alpha, args.moped, date)
-    log_path = 'runs/{}/{}/{}/{}/bs{}_lr{}_mc{}_temp_{}_ep{}_kd_{}_martern_{}_alpha_{}_moped_{}_{}'.format(args.data, args.model, date.split('-')[0], args.type, args.bs, args.lr, args.mc_runs, args.t, args.epochs, args.distill, args.martern, args.alpha, args.moped, date)
+
+    # log_path를 위한 파라미터들을 dict로 구성
+    log_params = {
+        'data': args.data,
+        'model': args.model,
+        'date': date.split('-')[0],
+        'type': args.type,
+        'bs': args.bs,
+        'lr': args.lr,
+        'mc_runs': args.mc_runs,
+        'temp': args.t,
+        'epochs': args.epochs,
+        'kd': args.distill,
+        'martern': args.martern,
+        'alpha': args.alpha,
+        'moped': args.moped,
+        'multi_moped': args.multi_moped,
+        'timestamp': date
+    }
+
+    # log_params의 항목들을 key=value 형식으로 자동으로 조합하여 log_path 구성
+    params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type']])
+    
+    log_path = f"runs/{log_params['data']}/{log_params['model']}/{log_params['date']}/{log_params['type']}/{params_str}"
+    
     writer = SummaryWriter(log_path)
     
+    assert args.distill or args.martern or args.moped or args.multi_moped, "Please specify the unique method"
     if args.distill:
         dnn_model = get_model(args, distill=True)
         dnn_model.load_state_dict(torch.load(args.weight))
@@ -27,13 +52,19 @@ def main(args):
         print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
         model = distill(dnn_model, model, steps = 1000, args = args, alpha= args.alpha, device = device, writer = writer)
         
-    if args.martern:
+    elif args.martern:
         dnn_model = get_model(args, distill=True)
         dnn_model.load_state_dict(torch.load(args.weight))
         print(colored(f"Weight is loaded from {args.weight}", 'green'))
         print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
         model = set_martern_prior(dnn_model, model, device = device)
         
+    elif args.multi_moped:
+        dnn_model = get_model(args, distill=True)
+        dnn_model.load_state_dict(torch.load(args.weight))
+        print(colored(f"Pretrained weight is loaded from {args.weight}", 'green'))
+        print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
+        model = Multivariate_MOPED(dnn = dnn_model, bnn = model, device = device)
     # Optimizer
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
     
@@ -79,6 +110,7 @@ if __name__ == '__main__':
     parser.add_argument('--moped', action='store_true', help='Use MOPED')
     parser.add_argument('--alpha', type=float, default= 0.0, help = 'Distill Coefficient')
     parser.add_argument('--martern', action='store_true', help='Use Martern Prior')
+    parser.add_argument('--multi_moped', action='store_true', help='Use Multi-MOPED')
     args = parser.parse_args()
     
     print(colored(args, 'blue'))
