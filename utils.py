@@ -116,6 +116,9 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             best_acc = acc_test
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_acc_model.pth'))
             print(colored(f"Best ACC model saved at epoch {e}", 'green'))
+            
+    torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
+    print(colored(f"Last model saved", 'green'))
 
 def test_BNN(model, test_loader, mc_runs, bs, device, moped=False):
     model.eval()
@@ -128,7 +131,7 @@ def test_BNN(model, test_loader, mc_runs, bs, device, moped=False):
     print(colored(f"MC runs: {mc_runs}", 'red'))
     with torch.no_grad():
         
-        for data, target in test_loader:
+        for data, target in tqdm(test_loader, desc='Testing'):
             data, target = data.to(device), target.to(device)
             
             outputs = []
@@ -229,7 +232,7 @@ def get_model(args, distill=False):
     
     if distill:
         args.type = 'dnn'
-        print(colored(f"Distillation mode is on", 'red'))
+        print(colored(f"Getting DNN model", 'red'))
         
     if args.type == 'dnn':
         
@@ -264,7 +267,7 @@ def get_model(args, distill=False):
             
         else:
             raise ValueError('Model not found')
-    
+        
     elif args.type == 'multi':
         
         if args.model == 'simple':
@@ -297,7 +300,13 @@ def get_model(args, distill=False):
         dnn_to_bnn(model, const_bnn_prior_parameters)
         
         args.type = 'uni'
-        print(colored(f"MOPED is on", 'red'))
+        
+    elif args.multi_moped:
+        
+        args.type = 'multi'
+    
+    if args.distill or args.martern:
+        args.type = 'multi'
         
     # Check the number of parameters
     print(f"Total number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
@@ -316,8 +325,7 @@ def get_model(args, distill=False):
         model = DDP(model.to(device), device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False)
         print(colored(f"Model is wrapped by DDP", 'red'))
     
-    if args.distill or args.martern:
-        args.type = 'multi'
+   
         
     if args.data == 'mnist' and args.model == 'resnet20':
         model.conv1 = Conv2dReparameterization(1, 16, 3, 1, 1) if args.type == 'uni' else Conv2dReparameterization_Multivariate(1, 16, 3, 1, 1)
