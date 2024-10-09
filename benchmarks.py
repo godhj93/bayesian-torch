@@ -50,6 +50,7 @@ def main(args):
     auroc = np.trapz(tpr, fpr)
 
     # AUROC 커브 그리기
+    plt.figure(figsize=(8, 6))
     plt.plot(fpr, tpr, label=f'AUROC = {auroc:.2f}')
     plt.xlabel('False Positive Rate (FPR)')
     plt.ylabel('True Positive Rate (TPR)')
