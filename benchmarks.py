@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os 
+import torch.nn as nn
 
 def main(args):
     
@@ -15,62 +16,52 @@ def main(args):
     model.load_state_dict(torch.load(args.weight))
     model.eval()
     
-    if args.ece:
-        args.bs = 10000
-        print(colored(f"Calculating ECE for {args.bs} data", 'green'))
-        _, test_loader = get_dataset(args)
+    args.bs = 10000
+    print(colored(f"Calculating ECE for {args.bs} data", 'green'))
+    _, test_loader = get_dataset(args)
 
-        ece_scores = []
-        for x,y in tqdm(test_loader):
-            with torch.no_grad():
-                logit_list = []
-                for _ in tqdm(range(args.mc_runs), desc = 'MC Sampling'):
-                    logits, _ = model(x.to(device))
-                    logit_list.append(logits)
-                logits = torch.stack(logit_list, dim=0).mean(dim=0)
-            compute_ece_and_plot_confidence_vs_accuracy_batches(logits, y, args = args, n_bins=15)
-            # ece = expected_calibration_error(logits, y, n_bins=10)
-            # ece_scores.append(ece)
-        
-        # print(np.mean(ece))
-    else:
-        # Get the dataset
-        _, test_loader = get_dataset(args)
-        args.data = 'tinyimagenet'
-        _, tiny_imagenet_loader = get_dataset(args)
-        
-        thresholds = np.linspace(0.01, 1.0, 100)
-        print(thresholds)
-        tpr = []  # True Positive Rate
-        fpr = []  # False Positive Rate
-        
-        
-        for thres in thresholds:
-            in_correct, out_correct = test_ood_detection(model, test_loader, tiny_imagenet_loader, thres)
-            
-            # TPR (In-distribution의 정확한 탐지 비율)
-            tpr.append(in_correct / len(test_loader.dataset))
-            
-            # FPR (Out-of-distribution의 잘못된 탐지 비율)
-            fpr.append(1 - (out_correct / len(tiny_imagenet_loader.dataset)))
+    for x,y in tqdm(test_loader):
+        with torch.no_grad():
+            logit_list = []
+            for _ in tqdm(range(args.mc_runs), desc = 'MC Sampling'):
+                logits, _ = model(x.to(device))
+                logit_list.append(logits)
+            logits = torch.stack(logit_list, dim=0).mean(dim=0)
+        compute_ece_and_plot_confidence_vs_accuracy_batches(logits, y, args = args, n_bins=15)
 
-        fpr, tpr = zip(*sorted(zip(fpr, tpr)))
+    args.data = 'tinyimagenet'
+    _, tiny_imagenet_loader = get_dataset(args)
+    
+    tpr = []  # True Positive Rate
+    fpr = []  # False Positive Rate
+    
+    # for thres in thresholds:
+    ood = test_ood_detection(model, test_loader, tiny_imagenet_loader)
+        
+    for thres, (in_correct, out_correct) in ood.items():
+        
+        # TPR (In-distribution의 정확한 탐지 비율)
+        tpr.append(in_correct / len(test_loader.dataset))
+        # FPR (Out-of-distribution의 잘못된 탐지 비율)
+        fpr.append(1 - (out_correct / len(tiny_imagenet_loader.dataset)))
 
-        auroc = np.trapz(tpr, fpr)
+    fpr, tpr = zip(*sorted(zip(fpr, tpr)))
 
-        # AUROC 커브 그리기
-        plt.plot(fpr, tpr, label=f'AUROC = {auroc:.2f}')
-        plt.xlabel('False Positive Rate (FPR)')
-        plt.ylabel('True Positive Rate (TPR)')
-        plt.title('AUROC Curve')
-        plt.legend()
-        plt.grid(True)
-        plt.savefig(f'auroc_curve_{args.weight.split("/")[-2]}.png', dpi=300)
+    auroc = np.trapz(tpr, fpr)
+
+    # AUROC 커브 그리기
+    plt.plot(fpr, tpr, label=f'AUROC = {auroc:.2f}')
+    plt.xlabel('False Positive Rate (FPR)')
+    plt.ylabel('True Positive Rate (TPR)')
+    plt.title('AUROC Curve')
+    plt.legend()
+    plt.grid(True)
+    save_dir = os.path.dirname(args.weight)
+    save_path = os.path.join(save_dir, f'auroc_{auroc:.2f}.png')
+    plt.savefig(save_path, dpi=300)
 
 # 테스트 함수 정의
-def test_ood_detection(model, in_loader, out_loader, threshold):
-    import torch.nn as nn
-    print(f'Threshold: {threshold}')
+def test_ood_detection(model, in_loader, out_loader):
     model.eval().cuda()
     in_distribution_scores = []
     out_distribution_scores = []
@@ -88,7 +79,6 @@ def test_ood_detection(model, in_loader, out_loader, threshold):
             in_distribution_scores.extend(max_probs.cpu().numpy())
     
     # OOD 데이터 생성 (예: Uniform Noise)
-    # ood_data = torch.rand((len(in_distribution_scores), 3, 32, 32))
     with torch.no_grad():
         for ood_data, _ in tqdm(out_loader, desc='Out-of-distribution'):
             outputs = []
@@ -106,13 +96,19 @@ def test_ood_detection(model, in_loader, out_loader, threshold):
     out_distribution_scores = np.array(out_distribution_scores)
 
     # Threshold에 따라 OOD Detection
-    in_correct = np.sum(in_distribution_scores > threshold)
-    out_correct = np.sum(out_distribution_scores < threshold)
-
+    thresholds = np.linspace(0.01, 1.0, 100)
+    ood = {}
     
-    print(f'In-distribution samples correctly detected: {in_correct}/{len(in_distribution_scores)}')
-    print(f'Out-of-distribution samples correctly detected: {out_correct}/{len(out_distribution_scores)}')
-    return in_correct, out_correct
+    pbar = tqdm(thresholds, desc='Thresholds')
+    for threshold in pbar:
+        in_correct = np.sum(in_distribution_scores > threshold)
+        out_correct = np.sum(out_distribution_scores < threshold)   
+        
+        ood[threshold] = (in_correct, out_correct)
+
+        pbar.set_description(f"Threshold: {threshold:.2f}, In-correct: {in_correct/len(in_distribution_scores)}, Out-correct: {out_correct}/{len(out_distribution_scores)}")
+    
+    return ood
 
 
 def compute_ece_and_plot_confidence_vs_accuracy_batches(logits_batches, labels_batches, args, n_bins=15):
@@ -128,7 +124,6 @@ def compute_ece_and_plot_confidence_vs_accuracy_batches(logits_batches, labels_b
     all_labels = []
 
     # 각 배치에 대해 처리
-    # for logits, labels in zip(logits_batches, labels_batches):
     # softmax를 적용하여 확률로 변환
     probs = torch.softmax(logits_batches, dim=1)
     preds = torch.argmax(probs, dim=1)
@@ -184,8 +179,7 @@ def compute_ece_and_plot_confidence_vs_accuracy_batches(logits_batches, labels_b
     save_dir = os.path.dirname(args.weight)
     save_path = os.path.join(save_dir, f'ece_{ece:.4f}_in_n_bins_{n_bins}.png')
     plt.savefig(save_path, dpi=300)
-    plt.show()
-    
+    # plt.show()
     print(colored(f"The figure is saved at {save_path}", 'green'))
 
     return ece
@@ -212,7 +206,6 @@ if __name__ == '__main__':
     
     '''
     Proposed (Ours): runs/cifar/resnet20/reference/bs128_lr0.001_mc50_temp_1.0_ep300_kd_True_alpha_0.0_moped_False_20240820-114307/best_model.pth
-    
     '''
     
     assert args.weight is not None, 'Please provide a path to load weights'
