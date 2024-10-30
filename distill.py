@@ -31,7 +31,121 @@ def Multivariate_MOPED(dnn, bnn, device = 'cuda'):
         
     return bnn
 
-def distill(dnn, bnn, steps, writer, alpha, args, device = 'cuda'):
+def distill(dnn, bnn, data_loader, writer, alpha, args, device = 'cuda'):
+    
+    bnn_good_prior = copy.deepcopy(bnn)
+    dnn_conv_layers = get_conv_layers(dnn)
+    bnn_conv_layers = get_conv_layers(bnn)
+    
+    # DNN과 BNN의 hook 출력을 따로 저장할 리스트
+    dnn_activation_outputs = []
+    bnn_activation_outputs = []
+
+    # Hook 함수 정의 (출력을 리스트에 저장)
+    def save_dnn_activation(module, input, output):
+        if isinstance(output, tuple):
+            output = output[0]
+        dnn_activation_outputs.append(output)
+
+    def save_bnn_activation(module, input, output):
+        if isinstance(output, tuple):
+            output = output[0]
+        bnn_activation_outputs.append(output)
+
+    # 모든 convolution layer에 hook을 설정하는 함수
+    def register_hooks(conv_layers, save_activation_func):
+        hooks = []
+        for layer in conv_layers:
+            hook = layer.register_forward_hook(save_activation_func)
+            hooks.append(hook)
+        return hooks
+        
+    # BNN의 각 convolution layer에 대해 개별 optimizer 설정
+    layer_optimizers = [torch.optim.Adam(layer.parameters(), lr=0.001) for layer in bnn_conv_layers]
+
+    # DNN과 BNN에 대해 hook 설정 (서로 다른 리스트에 저장)
+    dnn_hooks = register_hooks(dnn_conv_layers, save_dnn_activation)
+    bnn_hooks = register_hooks(bnn_conv_layers, save_bnn_activation)
+
+    # Check the precomputed prior exists
+    if os.path.exists(args.weight.replace('best_model.pth', f"Distilled_BNN_3210.0.pt")): # This condition never satisfies
+        
+        print(colored(f"Loading distilled BNN from {args.weight.replace('best_model.pth', f'Distilled_BNN.pt')}", 'red'))
+        ckpt = torch.load(args.weight.replace('best_model.pth', f"Distilled_BNN.pt"))
+        bnn_good_prior.load_state_dict(ckpt)
+        return bnn_good_prior
+      
+    else:
+
+        # 학습 루프
+        bnn.train().cuda()
+        dnn.eval().cuda()
+        num_epochs = 30
+
+        for epoch in range(num_epochs):
+            
+            pbar = tqdm(enumerate(data_loader), desc=f'Epoch {epoch+1}/{num_epochs}', total=len(data_loader))
+            
+            losses = []
+            for batch_idx, (x, target) in pbar:
+                # 미니배치 입력 데이터를 GPU로 전송
+                x = x.cuda()
+
+                # Hook 리스트 초기화 (매 배치마다 결과가 달라야 하므로)
+                dnn_activation_outputs.clear()
+                bnn_activation_outputs.clear()
+
+                # DNN과 BNN의 forward 연산
+                with torch.no_grad():
+                    dnn_output = dnn(x)  # DNN은 가중치를 학습하지 않으므로 no_grad 사용
+                    
+                bnn_output = bnn(x)  # BNN은 학습 대상
+
+                # 각 convolution layer 출력의 MSE 손실 및 파라미터 업데이트
+                loss_ = 0
+                for i, (dnn_act, bnn_act, optimizer) in enumerate(zip(dnn_activation_outputs, bnn_activation_outputs, layer_optimizers)):
+                    loss = F.mse_loss(dnn_act, bnn_act)  # 해당 레이어의 손실 계산
+
+                    # 역전파를 통해 손실을 최소화
+                    optimizer.zero_grad()  # 해당 레이어의 파라미터만 업데이트하도록 옵티마이저 초기화
+                    loss.backward(retain_graph=True)  # 역전파
+                    optimizer.step()  # 해당 레이어 파라미터 업데이트
+
+                    loss_ += loss.item()
+
+                losses.append(loss_ / len(layer_optimizers))
+
+                # Progress bar 업데이트
+                pbar.set_description(f"Epoch {epoch+1}/{num_epochs}, Loss: {np.mean(losses):.4f}")
+                writer.add_scalar('Distillation Loss', loss.item(), batch_idx + epoch * len(data_loader))
+                    
+        # 학습이 끝난 후 필요하지 않은 hook 제거
+        for hook in dnn_hooks:
+            hook.remove()
+        for hook in bnn_hooks:
+            hook.remove()
+        
+        # Set the prior and variational parameters 
+        bnn_good_prior_conv_layers = get_conv_layers(bnn_good_prior)
+        
+        for bnn_layer, bnn_good_prior_layer in zip(bnn_conv_layers, bnn_good_prior_conv_layers):
+            
+            bnn_good_prior_layer.distill = True
+            # Set the prior
+            bnn_good_prior_layer.prior_mean = bnn_layer.mu_kernel.detach().clone().flatten()
+            # print(colored(f"Disabled copying of prior mean", 'red'))
+            bnn_good_prior_layer.prior_cov_L = bnn_layer.get_covariance_param()[0].detach()
+            bnn_good_prior_layer.prior_cov_D = bnn_layer.get_covariance_param()[1].detach()
+            
+        print(colored(f"Disabled copying weights from DNN to BNN", 'red'))
+            
+        # Save the model
+        path_to_save = args.weight.replace('best_model.pth', f"Distilled_BNN_{alpha}.pt")
+        torch.save(bnn_good_prior.state_dict(), path_to_save)
+        print(colored(f"Distilled BNN saved at {path_to_save}", 'blue'))
+        return bnn_good_prior
+
+def distill_old(dnn, bnn, steps, writer, alpha, args, device = 'cuda'):
     
     bnn_good_prior = copy.deepcopy(bnn)
     dnn_conv_layers = get_conv_layers(dnn)

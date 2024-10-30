@@ -50,7 +50,7 @@ def main(args):
         dnn_model.load_state_dict(torch.load(args.weight))
         print(colored(f"Distilling from {args.weight}", 'green'))
         print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
-        model = distill(dnn_model, model, steps = 1000, args = args, alpha= args.alpha, device = device, writer = writer)
+        model = distill(dnn_model, model, data_loader = train_loader, args = args, alpha= args.alpha, device = device, writer = writer)
         
     elif args.martern:
         dnn_model = get_model(args, distill=True)
