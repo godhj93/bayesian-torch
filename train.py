@@ -44,13 +44,14 @@ def main(args):
     
     writer = SummaryWriter(log_path)
     
-    assert args.distill or args.martern or args.moped or args.multi_moped, "Please specify the unique method"
+    # assert args.distill or args.martern or args.moped or args.multi_moped, "Please specify the unique method"
     if args.distill:
         dnn_model = get_model(args, distill=True)
         dnn_model.load_state_dict(torch.load(args.weight))
         print(colored(f"Distilling from {args.weight}", 'green'))
         print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
         model = distill(dnn_model, model, data_loader = train_loader, args = args, alpha= args.alpha, device = device, writer = writer)
+        args.type = 'multi'
         
     elif args.martern:
         dnn_model = get_model(args, distill=True)
@@ -96,7 +97,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train')
-    parser.add_argument('--mc_runs', type=int, default=100, help='Number of Monte Carlo runs')
+    parser.add_argument('--mc_runs', type=int, default=1, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--bs', type=int, default=1024, help='Batch size')
     parser.add_argument('--model', type=str, default='simple', help='Model to train [simple, lenet, vgg7, resnet20]')
