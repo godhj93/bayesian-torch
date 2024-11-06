@@ -238,7 +238,7 @@ def get_model(args, distill=False):
         
         if args.model == 'simple':
             model = SimpleCNN()
-            
+
         elif args.model == 'lenet':
             model = LeNet5()
             
@@ -305,8 +305,8 @@ def get_model(args, distill=False):
         
         args.type = 'multi'
     
-    if args.distill or args.martern:
-        args.type = 'multi'
+    # if args.distill or args.martern:
+    #     args.type = 'multi'
         
     # Check the number of parameters
     print(f"Total number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
@@ -331,8 +331,35 @@ def get_model(args, distill=False):
         model.conv1 = Conv2dReparameterization(1, 16, 3, 1, 1) if args.type == 'uni' else Conv2dReparameterization_Multivariate(1, 16, 3, 1, 1)
         print(colored(f"{args.type} Conv1 input channel is changed to 1", 'red'))
     
-    elif args.data =='cifar' and args.model == 'lenet':
-        model.conv1 = Conv2dReparameterization(3, 6, 5, 1, 0) if args.type == 'uni' else Conv2dReparameterization_Multivariate(3, 6, 5, 1, 0)
+    elif args.data =='cifar':
+        if args.model == 'lenet':
+            if args.type == 'multi':
+                model.conv1 = Conv2dReparameterization_Multivariate(3, 6, 5, 1, 0)
+            elif args.type == 'dnn':
+                model.conv1 = torch.nn.Conv2d(3, 6, 5, 1)
+            elif args.type == 'uni':
+                model.conv1 = Conv2dReparameterization(3, 6, 5, 1, 0)
+            else:
+                raise NotImplementedError("Not implemented yet")
+        elif args.model == 'simple':
+            if args.type == 'multi':
+                model.conv1 = Conv2dReparameterization_Multivariate(
+                    in_channels = 3, 
+                    out_channels = 6, 
+                    kernel_size = 3, 
+                    stride = 1,
+                    padding = 0)
+
+            elif args.type == 'dnn':
+                model.conv1 = torch.nn.Conv2d(3, 6, 3, 1)
+
+            elif args.type == 'uni':
+                model.conv1 = Conv2dReparameterization(3, 6, 3, 1)
+
+            else:
+                raise NotImplementedError("Not implemented yet")
+        else:
+            raise NotImplementedError("Not implemented yet")
         print(colored(f"{args.type} Conv1 input channel is changed to 3", 'red'))
         
     else:
@@ -340,14 +367,14 @@ def get_model(args, distill=False):
     return model
 
 def get_dataset(args):
-    
+    print(colored(f"Data augmentaion is disabled", 'red'))
     if args.data == 'mnist':
        
         # Simple data augmentation 
         trasform_train = transforms.Compose([
-            transforms.RandomCrop(28, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomVerticalFlip(),
+            # transforms.RandomCrop(28, padding=4),
+            # transforms.RandomHorizontalFlip(),
+            # transforms.RandomVerticalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,))
         ])
@@ -367,9 +394,9 @@ def get_dataset(args):
         print(colored(f"CIFAR-10 dataset is loaded", 'green'))
         # Simple data augmentation
         transform_train = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomVerticalFlip(),
+            # transforms.RandomCrop(32, padding=4),
+            # transforms.RandomHorizontalFlip(),
+            # transforms.RandomVerticalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         ])
