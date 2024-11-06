@@ -450,6 +450,7 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         self.padding = padding
         self.dilation = dilation
         self.groups = groups
+        
         # variance of weight --> sigma = log (1 + exp(rho))
         self.bias = bias
 
@@ -462,14 +463,28 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         
         
         self.mu_kernel = Parameter(torch.Tensor(weight_size))
-        if isinstance(rank, str):
-            self.L_param = Parameter(torch.Tensor(weight_size, weight_size))
-        else:
-            if rank > weight_size:
-                rank = weight_size
-            self.L_param = Parameter(torch.Tensor(weight_size, rank))
-        self.D_param = Parameter(torch.Tensor(weight_size))
+        # if isinstance(rank, str):
+        #     if rank == 'full':
+        #         self.L_param = Parameter(torch.Tensor(weight_size, weight_size))
+        #     elif rank == 'half':
+        #         self.L_param = Parameter(torch.Tensor(weight_size, weight_size // 2))
+        #     elif rank == 'quarter':
+        #         self.L_param = Parameter(torch.Tensor(weight_size, weight_size // 4))
+        #     else:
+        #         raise NotImplemented("rank should be 'full' or 'half'")
+        # else:
+        #     if rank > weight_size:
+        #         rank = weight_size
+        #     self.L_param = Parameter(torch.Tensor(weight_size, rank))
+        # self.D_param = Parameter(torch.Tensor(weight_size))
         # self.D_param = torch.ones_like(self.mu_kernel) * 1e-10
+        
+        # 학습 가능한 파라미터로 설정
+        self.mu_kernel = Parameter(torch.Tensor(weight_size))
+        self.L_param = Parameter(torch.randn(weight_size * (weight_size + 1) // 2))  # 상삼각 파라미터 벡터 생성
+        self.L_indices = torch.triu_indices(row=weight_size, col=weight_size, offset=0)
+
+        self.D_param = F.softplus(torch.ones(weight_size) * 1e-30)
         
         self.register_buffer(
             'prior_mean',
@@ -502,7 +517,8 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
 
         self.mu_kernel.data.normal_(mean= 0 , std=0.1)
         self.L_param.data.normal_(mean= 0, std=0.1)
-        self.D_param.data.normal_(mean= 0, std=0.1)
+        # self.D_param.data.normal_(mean= 0, std=0.1)
+        # self.Scale_param.data.fill_(-4.0)
 
             
     def kl_loss(self):
@@ -510,17 +526,19 @@ class Conv2dReparameterization_Multivariate(BaseVariationalLayer_):
         return kl_divergence(self.variational_mvn, self.prior_mvn)
        
     def get_covariance_param(self):
-        
-        return self.L_param, self.D_param.exp().log1p().expand_as(self.mu_kernel).to(self.L_param.device)
+        # 상삼각 행렬 생성
+        upper_triangular_matrix = torch.zeros(self.weight_size, self.weight_size, device=self.L_param.device)
+        upper_triangular_matrix[self.L_indices[0], self.L_indices[1]] = self.L_param
+        return upper_triangular_matrix.to(self.L_param.device)
         
     def forward(self, input, return_kl=True):
         
         if self.dnn_to_bnn_flag:
             return_kl = False
 
-        L, D = self.get_covariance_param()
-        # D = F.softplus(torch.ones_like(D) * 1e-10)
-        self.variational_mvn = LowRankMultivariateNormal(self.mu_kernel, L, D)
+        # L, D = self.get_covariance_param()
+        upper_triangular_matrix = self.get_covariance_param()
+        self.variational_mvn = LowRankMultivariateNormal(self.mu_kernel, upper_triangular_matrix, self.D_param.to(self.L_param.device))
         weight = self.variational_mvn.rsample().view(self.out_channels, self.in_channels, self.kernel_size, self.kernel_size)
 
         
