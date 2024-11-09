@@ -22,6 +22,7 @@ import torch.distributed as dist
 from torch.utils.data import DistributedSampler
 from torchvision.datasets import ImageFolder
 
+import torch.nn.utils.prune as prune
 def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs, bs, device):
 
     model.to(device)
@@ -164,7 +165,6 @@ def test_BNN(model, test_loader, mc_runs, bs, device, moped=False):
 
 def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer, args):
     
-    
     model.to(device)    
     model.train()
     nlls = []
@@ -197,16 +197,32 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
         # args.scheduler.step()
         # print(colored(f"Learning rate: {optimizer.param_groups[0]['lr']}", 'red'))
         
-        writer.add_scalar('Train/accuracy', acc_train, e)
-        writer.add_scalar('Train/loss/NLL', np.mean(nlls), e)
-        writer.add_scalar('Test/accuracy', acc_test, e)
-        writer.add_scalar('Test/loss/NLL', np.mean(nlls), e)
+        if args.prune:
+            writer.add_scalar('Train/accuracy', acc_train, e + 1 + args.total_epoch)
+            writer.add_scalar('Train/loss/NLL', np.mean(nlls), e + 1 + args.total_epoch)
+            writer.add_scalar('Test/accuracy', acc_test, e + 1 + args.total_epoch)
+            writer.add_scalar('Test/loss/NLL', np.mean(nlls), e + 1 + args.total_epoch)
+
+        else:
+            writer.add_scalar('Train/accuracy', acc_train, e)
+            writer.add_scalar('Train/loss/NLL', np.mean(nlls), e)
+            writer.add_scalar('Test/accuracy', acc_test, e)
+            writer.add_scalar('Test/loss/NLL', np.mean(nlls), e)
         
         if best_loss > nll_test:
             best_loss = nll_test
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_model.pth'))
             print(colored(f"Best model saved at epoch {e+1}", 'green'))
         
+        if args.prune:
+
+            if best_loss <= args.best_nll or acc_test >= args.best_acc:
+                print(colored(f"Early stopping at epoch {e+1}", 'light_cyan'))
+                args.total_epoch += e + 1
+                save_path = os.path.join(writer.log_dir, f'pruned_model_{e + 1 + args.total_epoch}.pth')
+                save_pruned_model(model, save_path)
+                print(colored(f"Total epoch: {args.total_epoch}", 'light_cyan'))
+                return 
     torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
     
 def test_DNN(model, test_loader):
@@ -227,6 +243,22 @@ def test_DNN(model, test_loader):
             nlls.append(loss.item())
     return correct / total, np.mean(nlls)
 
+
+def save_pruned_model(model, save_path):
+    """
+    Save the pruned model with masks removed.
+    Args:
+        model (torch.nn.Module): The model to save.
+        save_path (str): Path to save the model.
+    """
+    # Remove pruning masks before saving
+    for name, module in model.named_modules():
+        if hasattr(module, "weight") and hasattr(module, "weight_orig"):
+            prune.remove(module, "weight")
+    
+    # Save the model's state_dict
+    torch.save(model.state_dict(), save_path)
+    # print(f"Pruned model saved (masks removed) at: {save_path}")
 
 def get_model(args, distill=False):
     
@@ -359,7 +391,7 @@ def get_model(args, distill=False):
             else:
                 raise NotImplementedError("Not implemented yet")
         else:
-            raise NotImplementedError("Not implemented yet")
+            print(colored(f"{args.model} will be used.", 'red'))
         print(colored(f"{args.type} Conv1 input channel is changed to 3", 'red'))
         
     else:
@@ -369,7 +401,7 @@ def get_model(args, distill=False):
 def get_dataset(args):
     print(colored(f"Data augmentaion is disabled", 'red'))
     if args.data == 'mnist':
-       
+        
         # Simple data augmentation 
         trasform_train = transforms.Compose([
             # transforms.RandomCrop(28, padding=4),

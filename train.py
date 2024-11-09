@@ -5,7 +5,26 @@ import argparse
 from torch.utils.tensorboard import SummaryWriter
 import datetime
 from termcolor import colored
+import torch.nn.utils.prune as prune
 
+def prune_model(model, sparsity):
+    """
+    Prunes the model to achieve the desired sparsity level.
+    Args:
+        model (torch.nn.Module): The model to prune.
+        sparsity (float): Desired sparsity level (0.0 to 1.0).
+    """
+    for name, module in model.named_modules():
+        # Check if the module is a pruning target (Conv2D or Linear layers)
+        if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)):
+            # Apply or update pruning
+            prune.l1_unstructured(module, name='weight', amount=sparsity)
+
+            # Calculate the percentage of weights pruned
+            pruned_percentage = 1 - float(module.weight_mask.sum()) / module.weight.numel()
+            print(colored(f"Pruned {name}: {pruned_percentage:.2%} of weights set to 0", 'yellow'))
+        else:
+            print(colored(f"Skipping {name}: Not a prunable layer", 'cyan'))
 
 def main(args):
 
@@ -73,25 +92,50 @@ def main(args):
     args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[args.epochs], gamma=1.0) # Never decay the learning rate
     
     if args.type == 'dnn':
-        train_DNN(epoch = args.epochs, 
-                  model = model, 
-                  train_loader = train_loader, 
-                  test_loader = test_loader, 
-                  optimizer = optim, 
-                  writer = writer,
-                  device = device,
-                  args = args)
+
+        if args.prune:
+            model.load_state_dict(torch.load(args.weight))
+            args.best_acc, args.best_nll = test_DNN(model, test_loader)
+            args.total_epoch = 0
+            for i in range(100):
+
+                
+                args.prune_iter = i
+
+                # Pruning step
+                prune_model(model, sparsity=i/100.0)
+                # Training
+                train_DNN(epoch=args.epochs, 
+                        model=model, 
+                        train_loader=train_loader, 
+                        test_loader=test_loader, 
+                        optimizer=optim, 
+                        writer=writer,
+                        device=device,
+                        args=args)
+                
+                
+        else:
+            train_DNN(epoch=args.epochs, 
+                    model=model, 
+                    train_loader=train_loader, 
+                    test_loader=test_loader, 
+                    optimizer=optim, 
+                    writer=writer,
+                    device=device,
+                    args=args)
+
     else:
-        train_BNN(epoch = args.epochs, 
-                  model = model, 
-                  train_loader = train_loader, 
-                  test_loader = test_loader, 
-                  optimizer = optim, 
-                  mc_runs = args.mc_runs, 
-                  bs = args.bs, 
-                  writer = writer,
-                  device = device,
-                  args = args)
+        train_BNN(epoch=args.epochs, 
+                  model=model, 
+                  train_loader=train_loader, 
+                  test_loader=test_loader, 
+                  optimizer=optim, 
+                  mc_runs=args.mc_runs, 
+                  bs=args.bs, 
+                  writer=writer,
+                  device=device,
+                  args=args)
 
 if __name__ == '__main__':
     
@@ -107,11 +151,12 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, default='mnist', help='Dataset to use [mnist, cifar]')
     parser.add_argument('--train_sampler', type=bool, default=False, help='Do not use this argument')
     parser.add_argument('--distill', action='store_true', help='Use distillation')
-    parser.add_argument('--weight', type=str, help = 'DNN weight path for distillation')
+    parser.add_argument('--weight', type=str, help='DNN weight path for distillation')
     parser.add_argument('--moped', action='store_true', help='Use MOPED')
     parser.add_argument('--alpha', type=float, default= 0.0, help = 'Distill Coefficient')
     parser.add_argument('--martern', action='store_true', help='Use Martern Prior')
     parser.add_argument('--multi_moped', action='store_true', help='Use Multi-MOPED')
+    parser.add_argument('--prune', action='store_true', help='Use pruning')
     args = parser.parse_args()
     
     print(colored(args, 'blue'))
