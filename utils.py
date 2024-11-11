@@ -23,6 +23,7 @@ from torch.utils.data import DistributedSampler
 from torchvision.datasets import ImageFolder
 
 import torch.nn.utils.prune as prune
+
 def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs, bs, device):
 
     model.to(device)
@@ -219,10 +220,13 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             if best_loss <= args.best_nll or acc_test >= args.best_acc:
                 print(colored(f"Early stopping at epoch {e+1}", 'light_cyan'))
                 args.total_epoch += e + 1
-                save_path = os.path.join(writer.log_dir, f'pruned_model_{e + 1 + args.total_epoch}.pth')
+                save_path = os.path.join(writer.log_dir, f'pruned_model_iter_{args.prune_iter}.pth')
                 save_pruned_model(model, save_path)
                 print(colored(f"Total epoch: {args.total_epoch}", 'light_cyan'))
                 return 
+            elif e == epoch - 1:
+                print(colored(f"Early stopping at epoch since the accuracy does not recovered", 'light_cyan'))
+                return
     torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
     
 def test_DNN(model, test_loader):
@@ -404,9 +408,9 @@ def get_dataset(args):
         
         # Simple data augmentation 
         trasform_train = transforms.Compose([
-            # transforms.RandomCrop(28, padding=4),
-            # transforms.RandomHorizontalFlip(),
-            # transforms.RandomVerticalFlip(),
+            transforms.RandomCrop(28, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,))
         ])

@@ -85,7 +85,30 @@ def main(args):
         print(colored(f"Pretrained weight is loaded from {args.weight}", 'green'))
         print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
         model = Multivariate_MOPED(dnn = dnn_model, bnn = model, device = device)
-    # Optimizer
+    '''
+    TESTING
+    '''
+    from models import LeNet5, LeNet5_uni
+    dnn = LeNet5()
+    dnn.load_state_dict(torch.load('runs/mnist/lenet/20241110/dnn/bs_512_lr_0.001_mc_runs_1_temp_1.0_epochs_30_kd_False_martern_False_alpha_0.0_moped_False_multi_moped_False_timestamp_20241110-045538/best_model.pth'))
+
+    model = LeNet5_uni()
+    model.conv1.prior_weight_mu = dnn.conv1.weight.view(-1)
+    model.conv1.prior_weight_sigma = torch.load('variance_conv1.weight.pth')
+    print(model.conv1.prior_weight_sigma.shape)
+    model.conv2.prior_weight_mu = dnn.conv2.weight.view(-1)
+    model.conv2.prior_weight_sigma = torch.load('variance_conv2.weight.pth')
+    print(model.conv2.prior_weight_sigma.shape)
+    model.conv3.prior_weight_mu = dnn.conv3.weight.view(-1)
+    model.conv3.prior_weight_sigma = torch.load('variance_conv3.weight.pth')
+    print(model.conv3.prior_weight_sigma.shape)
+    model.fc1.prior_weight_mu = dnn.fc1.weight.view(-1)
+    model.fc1.prior_weight_sigma = torch.load('variance_fc1.weight.pth')
+    print(model.fc1.prior_weight_sigma.shape)
+    model.fc2.prior_weight_mu = dnn.fc2.weight.view(-1)
+    model.fc2.prior_weight_sigma = torch.load('variance_fc2.weight.pth')
+    print(model.fc2.prior_weight_sigma.shape)
+    # # Optimizer
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
     
     # Learning rate scheduler
