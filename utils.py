@@ -430,8 +430,8 @@ def get_dataset(args):
         print(colored(f"CIFAR-10 dataset is loaded", 'green'))
         # Simple data augmentation
         transform_train = transforms.Compose([
-            # transforms.RandomCrop(32, padding=4),
-            # transforms.RandomHorizontalFlip(),
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
             # transforms.RandomVerticalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
@@ -488,7 +488,7 @@ def get_dataset(args):
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.bs, sampler=args.train_sampler, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.bs, sampler=args.test_sampler, num_workers=4, pin_memory=True)
         print(colored(f"Data is wrapped by DistributedSampler", 'red'))
-        
+
     return train_loader, test_loader
     
     

@@ -85,34 +85,12 @@ def main(args):
         print(colored(f"Pretrained weight is loaded from {args.weight}", 'green'))
         print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
         model = Multivariate_MOPED(dnn = dnn_model, bnn = model, device = device)
-    '''
-    TESTING
-    '''
-    from models import LeNet5, LeNet5_uni
-    dnn = LeNet5()
-    dnn.load_state_dict(torch.load('runs/mnist/lenet/20241110/dnn/bs_512_lr_0.001_mc_runs_1_temp_1.0_epochs_30_kd_False_martern_False_alpha_0.0_moped_False_multi_moped_False_timestamp_20241110-045538/best_model.pth'))
-
-    model = LeNet5_uni()
-    model.conv1.prior_weight_mu = dnn.conv1.weight.view(-1)
-    model.conv1.prior_weight_sigma = torch.load('variance_conv1.weight.pth')
-    print(model.conv1.prior_weight_sigma.shape)
-    model.conv2.prior_weight_mu = dnn.conv2.weight.view(-1)
-    model.conv2.prior_weight_sigma = torch.load('variance_conv2.weight.pth')
-    print(model.conv2.prior_weight_sigma.shape)
-    model.conv3.prior_weight_mu = dnn.conv3.weight.view(-1)
-    model.conv3.prior_weight_sigma = torch.load('variance_conv3.weight.pth')
-    print(model.conv3.prior_weight_sigma.shape)
-    model.fc1.prior_weight_mu = dnn.fc1.weight.view(-1)
-    model.fc1.prior_weight_sigma = torch.load('variance_fc1.weight.pth')
-    print(model.fc1.prior_weight_sigma.shape)
-    model.fc2.prior_weight_mu = dnn.fc2.weight.view(-1)
-    model.fc2.prior_weight_sigma = torch.load('variance_fc2.weight.pth')
-    print(model.fc2.prior_weight_sigma.shape)
-    # # Optimizer
+   
+    # Optimizer
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
-    
+
     # Learning rate scheduler
-    args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[args.epochs], gamma=1.0) # Never decay the learning rate
+    # args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[args.epochs], gamma=1.0) # Never decay the learning rate
     
     if args.type == 'dnn':
 
@@ -165,8 +143,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train')
     parser.add_argument('--mc_runs', type=int, default=1, help='Number of Monte Carlo runs')
-    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--bs', type=int, default=1024, help='Batch size')
+    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
+    parser.add_argument('--bs', type=int, default=512, help='Batch size')
     parser.add_argument('--model', type=str, default='simple', help='Model to train [simple, lenet, vgg7, resnet20]')
     parser.add_argument('--type', type=str, default='dnn', help='Type of model [dnn, uni, multi]')
     parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
