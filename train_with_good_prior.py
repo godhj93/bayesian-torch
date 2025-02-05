@@ -8,6 +8,7 @@ from utils import get_dataset, get_model, test_DNN, test_BNN, train_BNN
 from distill import get_conv_layers
 from torch.distributions import Normal
 import argparse
+from termcolor import colored
 
 def main():
     
@@ -35,7 +36,8 @@ def main():
 
     bnn = get_model(args_bnn)
 
-    test_DNN(dnn, test_loader)
+    acc, loss = test_DNN(dnn, test_loader)
+    print(colored(f"Acc: {acc:.2f}%, Loss: {loss:.4f}", 'green'))
 
     # Calculate Sparsity
     total = 0
@@ -52,11 +54,12 @@ def main():
 
     for dnn_layer, bnn_layer in zip(dnn_conv_layers, bnn_conv_layers):
         
-        mu = dnn_layer.weight.flatten().detach().cpu().clone()
+        mu = dnn_layer.weight.detach().cpu().clone()#.flatten().detach().cpu().clone()
         std = torch.where(mu == 0 , torch.ones_like(mu), torch.ones_like(mu) * 1e-3)
-        
         bnn_layer.prior_weight_mu = mu
         bnn_layer.prior_weight_sigma = std
+        
+        # raise ValueError('Stop Here')
 
     import datetime
     from torch.utils.tensorboard import SummaryWriter
