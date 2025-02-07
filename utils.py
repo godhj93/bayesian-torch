@@ -172,9 +172,11 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
     correct = 0
     total = 0
     best_loss = torch.inf
+    
     for e in range(epoch):
         
         pbar = tqdm(enumerate(train_loader), total=len(train_loader), ncols=0)
+
         for batch_idx, (data, target) in pbar:
             
             data, target = data.to(device), target.to(device)

@@ -65,6 +65,7 @@ def main(args):
     
     # assert args.distill or args.martern or args.moped or args.multi_moped, "Please specify the unique method"
     if args.distill:
+        print("Distillation is used")
         dnn_model = get_model(args, distill=True)
         dnn_model.load_state_dict(torch.load(args.weight))
         print(colored(f"Distilling from {args.weight}", 'green'))
@@ -73,6 +74,7 @@ def main(args):
         args.type = 'multi'
         
     elif args.martern:
+        print("Martern Prior is used")
         dnn_model = get_model(args, distill=True)
         dnn_model.load_state_dict(torch.load(args.weight))
         print(colored(f"Weight is loaded from {args.weight}", 'green'))
@@ -80,6 +82,7 @@ def main(args):
         model = set_martern_prior(dnn_model, model, device = device)
         
     elif args.multi_moped:
+        print("Multi-MOPED is used")
         dnn_model = get_model(args, distill=True)
         dnn_model.load_state_dict(torch.load(args.weight))
         print(colored(f"Pretrained weight is loaded from {args.weight}", 'green'))
@@ -100,11 +103,11 @@ def main(args):
             args.total_epoch = 0
             for i in range(100):
 
-                
                 args.prune_iter = i
 
                 # Pruning step
                 prune_model(model, sparsity=i/100.0)
+                
                 # Training
                 train_DNN(epoch=args.epochs, 
                         model=model, 
@@ -141,15 +144,15 @@ def main(args):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train')
+    parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train')
     parser.add_argument('--mc_runs', type=int, default=1, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--bs', type=int, default=512, help='Batch size')
-    parser.add_argument('--model', type=str, default='simple', help='Model to train [simple, lenet, vgg7, resnet20]')
+    parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20]')
     parser.add_argument('--type', type=str, default='dnn', help='Type of model [dnn, uni, multi]')
     parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
     parser.add_argument('--t', type=float, default=1.0, help='Cold Posterior temperature')
-    parser.add_argument('--data', type=str, default='mnist', help='Dataset to use [mnist, cifar]')
+    parser.add_argument('--data', type=str, default='cifar', help='Dataset to use [mnist, cifar]')
     parser.add_argument('--train_sampler', type=bool, default=False, help='Do not use this argument')
     parser.add_argument('--distill', action='store_true', help='Use distillation')
     parser.add_argument('--weight', type=str, help='DNN weight path for distillation')
