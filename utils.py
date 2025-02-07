@@ -204,13 +204,13 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             writer.add_scalar('Train/accuracy', acc_train, e + 1 + args.total_epoch)
             writer.add_scalar('Train/loss/NLL', np.mean(nlls), e + 1 + args.total_epoch)
             writer.add_scalar('Test/accuracy', acc_test, e + 1 + args.total_epoch)
-            writer.add_scalar('Test/loss/NLL', np.mean(nlls), e + 1 + args.total_epoch)
+            writer.add_scalar('Test/loss/NLL', np.mean(nll_test), e + 1 + args.total_epoch)
 
         else:
             writer.add_scalar('Train/accuracy', acc_train, e)
             writer.add_scalar('Train/loss/NLL', np.mean(nlls), e)
             writer.add_scalar('Test/accuracy', acc_test, e)
-            writer.add_scalar('Test/loss/NLL', np.mean(nlls), e)
+            writer.add_scalar('Test/loss/NLL', np.mean(nll_test), e)
         
         if best_loss > nll_test:
             best_loss = nll_test
