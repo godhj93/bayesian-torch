@@ -88,7 +88,8 @@ def main(args):
         print(colored(f"Pretrained weight is loaded from {args.weight}", 'green'))
         print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
         model = Multivariate_MOPED(dnn = dnn_model, bnn = model, device = device)
-   
+    
+
     # Optimizer
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -145,10 +146,10 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
     parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train')
-    parser.add_argument('--mc_runs', type=int, default=1, help='Number of Monte Carlo runs')
+    parser.add_argument('--mc_runs', type=int, default=30, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
-    parser.add_argument('--bs', type=int, default=512, help='Batch size')
-    parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20]')
+    parser.add_argument('--bs', type=int, default=128, help='Batch size')
+    parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20, resnet56, resnet110]')
     parser.add_argument('--type', type=str, default='dnn', help='Type of model [dnn, uni, multi]')
     parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
     parser.add_argument('--t', type=float, default=1.0, help='Cold Posterior temperature')

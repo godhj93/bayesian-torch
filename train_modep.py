@@ -9,55 +9,41 @@ from distill import get_conv_layers
 from torch.distributions import Normal
 import argparse
 from termcolor import colored
+from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
 
 def main():
     
-    class opt:
-        
+    class opt:  
         type = 'dnn'
-        model = 'resnet20'
+        model = 'lenet'
         moped = False
         multi_moped = False
         multi_gpu = False
         data = 'cifar'
-        bs = 128
+        bs = 512
+        train_sampler = False
         
     args_dnn = opt()
     args_bnn = opt()
     args_bnn.type = 'uni'
     args_bnn.train_sampler = False
-    args_bnn.t = 1.0
-    args_bnn.bs = 128
-            
+    
     dnn = get_model(args_dnn)
     ckpt = torch.load(args.weight)
     dnn.load_state_dict(ckpt)
     train_loader, test_loader = get_dataset(args_dnn)
 
-    bnn = get_model(args_bnn)
-
-    acc, loss = test_DNN(dnn, test_loader)
-    print(colored(f"Acc: {acc:.2f}%, Loss: {loss:.4f}", 'green'))
-
-    # Calculate Sparsity
-    total = 0
-    zero = 0
-    for name, param in dnn.named_parameters():
-        if 'weight' in name:
-            total += param.numel()
-            zero += torch.sum(param == 0).item()
-    sparsity = zero/total
-    print(f"Sparsity: {sparsity*100:.2f}%")
-
-    dnn_conv_layers = get_conv_layers(dnn)
-    bnn_conv_layers = get_conv_layers(bnn)
-
-    for dnn_layer, bnn_layer in zip(dnn_conv_layers, bnn_conv_layers):
+    const_bnn_prior_parameters = {
+        "prior_mu": 0.0,
+        "prior_sigma": 1.0,
+        "posterior_mu_init": 0.0,
+        "posterior_rho_init": -3.0,
+        "type": "Reparameterization",  # Flipout or Reparameterization
+        "moped_enable": True,  # True to initialize mu/sigma from the pretrained dnn weights
+        "moped_delta": 0.5,
+    }
         
-        mu = dnn_layer.weight.detach().cpu().clone()#.flatten().detach().cpu().clone()
-        std = torch.where(mu == 0 , torch.ones_like(mu), torch.ones_like(mu))
-        bnn_layer.prior_weight_mu = mu
-        bnn_layer.prior_weight_sigma = std
+    dnn_to_bnn(dnn, const_bnn_prior_parameters)
 
     import datetime
     from torch.utils.tensorboard import SummaryWriter
@@ -66,12 +52,12 @@ def main():
     # log_path를 위한 파라미터들을 dict로 구성
     log_params = {
         'data': 'cifar',
-        'model': 'resnet20',
+        'model': 'lenet',
         'date': date.split('-')[0],
         'type': 'uni',
-        'bs': 128,
+        'bs': 512,
         'lr': 1e-3,
-        'mc_runs': 30,
+        'mc_runs': 1,
         'temp': 1.0,
         'epochs': 1000,
         'kd': True,
@@ -80,7 +66,7 @@ def main():
         'moped': False,
         'multi_moped': False,
         'timestamp': date,
-        'sparsity': sparsity
+        'sparsity': 'MODEP'
         }
 
         # log_params의 항목들을 key=value 형식으로 자동으로 조합하여 log_path 구성
@@ -90,15 +76,19 @@ def main():
         
     writer = SummaryWriter(log_path)
 
+    args_bnn.moped = True
+    args_bnn.t = 1.0
+    args_bnn.bs = 512
+    
     train_BNN(
         epoch = 1000,
-        model = bnn.cuda(),
+        model = dnn.cuda(),
         train_loader = train_loader,
         test_loader = test_loader,
-        optimizer = optim.Adam(bnn.parameters(), lr=1e-3),
+        optimizer = optim.Adam(dnn.parameters(), lr=1e-3),
         writer = writer,
-        mc_runs = 30,
-        bs = 128,
+        mc_runs = 1,
+        bs = 512,
         device = 'cuda',
         args = args_bnn   
     )
@@ -107,10 +97,10 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
     parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train')
-    parser.add_argument('--mc_runs', type=int, default=30, help='Number of Monte Carlo runs')
+    parser.add_argument('--mc_runs', type=int, default=1, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
-    parser.add_argument('--bs', type=int, default=128, help='Batch size')
-    parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20, resnet56, resnet110]')
+    parser.add_argument('--bs', type=int, default=512, help='Batch size')
+    parser.add_argument('--model', type=str, default='lenet', help='Model to train [simple, lenet, vgg7, resnet20]')
     parser.add_argument('--type', type=str, default='uni', help='Type of model [dnn, uni, multi]')
     parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
     parser.add_argument('--t', type=float, default=1.0, help='Cold Posterior temperature')
