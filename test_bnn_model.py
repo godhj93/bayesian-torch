@@ -18,7 +18,7 @@ sns.set_style("whitegrid")
 sns.set_context("talk")
 palette = sns.color_palette("bright", 3)  
 
-def test_ood_detection(model, in_loader, out_loader, mc_runs=1, n_bins=30, args=None):
+def test_ood_detection(model, in_loader, out_loader, mc_runs_test=50, n_bins=30, args=None):
     model.eval().cuda()
     
     results = {
@@ -470,12 +470,7 @@ def compute_mutual_information(mc_probabilities):
 
     return mutual_information, predictive_entropy
 
-def main():
-    
-    #*──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-    #*────────────────────────────────────────────── Have to Change the model to BNN ───────────────────────────────────────────────────────────
-    #*──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-    
+def main(args):
     class opt:
         type = 'dnn'
         model = 'lenet'
@@ -486,10 +481,11 @@ def main():
         bs = 128
         
     args_bnn = opt()
-    args_bnn.type = 'uni'
+    args_bnn.model = args.model
+    args_bnn.type = args.type
     args_bnn.train_sampler = False
-    args_bnn.t = 1.0
-    args_bnn.bs = 128
+    args_bnn.t = args.t
+    args_bnn.bs = args.bs
     args_bnn.weight = args.weight
 
     bnn = get_model(args_bnn)
@@ -501,7 +497,7 @@ def main():
     #! ID Dataset
     acc, nnl, kl = test_BNN(model = bnn,
                  test_loader = test_loader,
-                 mc_runs = args.mc_runs,
+                 mc_runs_test = args.mc_runs_test,
                  bs = args.bs,
                  device = 'cuda')
 
@@ -513,16 +509,19 @@ def main():
     args_bnn.data = 'tinyimagenet'
     tinyimagenet_train_loader, tinyimagenet_test_loader = get_dataset(args_bnn)
     
-    test_ood_detection(bnn, test_loader, svhn_test_loader, mc_runs=args.mc_runs)
-    test_ood_detection(bnn, test_loader, tinyimagenet_test_loader, mc_runs=args.mc_runs)
+    test_ood_detection(bnn, test_loader, svhn_test_loader, mc_runs_test=args.mc_runs_test)
+    test_ood_detection(bnn, test_loader, tinyimagenet_test_loader, mc_runs_test=args.mc_runs_test)
      
 if __name__ == '__main__':
     
 
     parser = argparse.ArgumentParser(description='Testing a Bayesian Neural Network')
     parser.add_argument('--weight', type=str, help='DNN weight path for distillation')
-    parser.add_argument('--mc_runs', type=int, default=30, help='Number of Monte Carlo runs')
-    parser.add_argument('--bs', type=int, default=128, help='Batch size')
+    parser.add_argument('--mc_runs_test', type=int, default=50, help='Number of Monte Carlo runs')
+    parser.add_argument('--bs', type=int, default=512, help='Batch size')
+    parser.add_argument('--type', type=str, default='uni', help='Type of model [dnn, uni, multi]')
+    parser.add_argument('--t', type=float, default=1.0, help='Cold Posterior temperature')
+    parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20, resnet56, resnet110]')
     args = parser.parse_args()
     
-    main()
+    main(args)

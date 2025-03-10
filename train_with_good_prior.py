@@ -1,16 +1,11 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
-import matplotlib.pyplot as plt
-from utils import get_dataset, get_model, test_DNN, test_BNN, train_BNN
+from utils import get_dataset, get_model, test_DNN, train_BNN
 from distill import get_conv_layers
-from torch.distributions import Normal
 import argparse
 from termcolor import colored
 
-def main():
+def main(args):
     
     class opt:
         
@@ -21,19 +16,20 @@ def main():
         multi_gpu = False
         data = 'cifar'
         bs = 128
+        augmentaiton = False
         
-    args_dnn = opt()
-    args_bnn = opt()
-    args_bnn.type = 'uni'
-    args_bnn.train_sampler = False
-    args_bnn.t = 1.0
-    args_bnn.bs = 128
-            
+    args_dnn = opt()            
     dnn = get_model(args_dnn)
     ckpt = torch.load(args.weight)
     dnn.load_state_dict(ckpt)
+    args_dnn.data = args.data
+    args_dnn.augmentaiton = args.augmentaiton
     train_loader, test_loader = get_dataset(args_dnn)
 
+    args_bnn = opt()
+    args_bnn.type = args.type
+    args_bnn.t = args.t
+    args_bnn.bs = args.bs
     bnn = get_model(args_bnn)
 
     acc, loss = test_DNN(dnn, test_loader)
@@ -54,7 +50,7 @@ def main():
 
     for dnn_layer, bnn_layer in zip(dnn_conv_layers, bnn_conv_layers):
         
-        mu = dnn_layer.weight.detach().cpu().clone()#.flatten().detach().cpu().clone()
+        mu = dnn_layer.weight.detach().cpu().clone()
         std = torch.where(mu == 0 , torch.ones_like(mu), torch.ones_like(mu))
         bnn_layer.prior_weight_mu = mu
         bnn_layer.prior_weight_sigma = std
@@ -63,17 +59,17 @@ def main():
     from torch.utils.tensorboard import SummaryWriter
     date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    # log_path를 위한 파라미터들을 dict로 구성
     log_params = {
-        'data': 'cifar',
-        'model': 'resnet20',
+        'data': args.data,
+        'model': args.model,
         'date': date.split('-')[0],
-        'type': 'uni',
-        'bs': 128,
-        'lr': 1e-3,
-        'mc_runs': 30,
-        'temp': 1.0,
-        'epochs': 1000,
+        'type': args.type,
+        'bs': args.bs,
+        'lr': args.lr,
+        'mc_runs_train': args.mc_runs_train,
+        'mc_runs_test': args.mc_runs_test,
+        'temp': args.t,
+        'epochs': args.epochs,
         'kd': True,
         'martern': True,
         'alpha': 0,
@@ -82,8 +78,7 @@ def main():
         'timestamp': date,
         'sparsity': sparsity
         }
-
-        # log_params의 항목들을 key=value 형식으로 자동으로 조합하여 log_path 구성
+    
     params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type']])
     
     log_path = f"runs/{log_params['data']}/{log_params['model']}/{log_params['date']}/{log_params['type']}/{log_params['sparsity']}/{params_str}_pruned_more_small_other_more_bigger"
@@ -91,14 +86,15 @@ def main():
     writer = SummaryWriter(log_path)
 
     train_BNN(
-        epoch = 1000,
+        epoch = args.epochs,
         model = bnn.cuda(),
         train_loader = train_loader,
         test_loader = test_loader,
         optimizer = optim.Adam(bnn.parameters(), lr=1e-3),
         writer = writer,
-        mc_runs = 30,
-        bs = 128,
+        mc_runs_train = args.mc_runs_train,
+        mc_runs_test = args.mc_runs_test,
+        bs = args.bs,
         device = 'cuda',
         args = args_bnn   
     )
@@ -106,10 +102,11 @@ def main():
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
-    parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train')
-    parser.add_argument('--mc_runs', type=int, default=30, help='Number of Monte Carlo runs')
+    parser.add_argument('--epochs', type=int, default=500, help='Number of epochs to train')
+    parser.add_argument('--mc_runs_train', type=int, default=1, help='Number of Monte Carlo runs for trian')
+    parser.add_argument('--mc_runs_test', type=int, default=50, help='Number of Monte Carlo runs for test')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
-    parser.add_argument('--bs', type=int, default=128, help='Batch size')
+    parser.add_argument('--bs', type=int, default=512, help='Batch size')
     parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20, resnet56, resnet110]')
     parser.add_argument('--type', type=str, default='uni', help='Type of model [dnn, uni, multi]')
     parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
@@ -123,6 +120,7 @@ if __name__ == '__main__':
     parser.add_argument('--martern', action='store_true', help='Use Martern Prior')
     parser.add_argument('--multi_moped', action='store_true', help='Use Multi-MOPED')
     parser.add_argument('--prune', action='store_true', help='Use pruning')
+    parser.add_argument('--augmentaiton', type = bool, default = False, help = 'Augmentaiton')
     args = parser.parse_args()
     
-    main()
+    main(args)

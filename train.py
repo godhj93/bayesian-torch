@@ -8,36 +8,20 @@ from termcolor import colored
 import torch.nn.utils.prune as prune
 
 def prune_model(model, sparsity):
-    """
-    Prunes the model to achieve the desired sparsity level.
-    Args:
-        model (torch.nn.Module): The model to prune.
-        sparsity (float): Desired sparsity level (0.0 to 1.0).
-    """
     for name, module in model.named_modules():
-        # Check if the module is a pruning target (Conv2D or Linear layers)
         if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)):
-            # Apply or update pruning
             prune.l1_unstructured(module, name='weight', amount=sparsity)
-
-            # Calculate the percentage of weights pruned
             pruned_percentage = 1 - float(module.weight_mask.sum()) / module.weight.numel()
             print(colored(f"Pruned {name}: {pruned_percentage:.2%} of weights set to 0", 'yellow'))
         else:
             print(colored(f"Skipping {name}: Not a prunable layer", 'cyan'))
 
 def main(args):
-
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
     model = get_model(args)
-    
     train_loader, test_loader = get_dataset(args)
-        
-    # 현재 날짜와 시간을 포맷팅
     date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    # log_path를 위한 파라미터들을 dict로 구성
     log_params = {
         'data': args.data,
         'model': args.model,
@@ -45,7 +29,8 @@ def main(args):
         'type': args.type,
         'bs': args.bs,
         'lr': args.lr,
-        'mc_runs': args.mc_runs,
+        'mc_runs_train': args.mc_runs_train,
+        'mc_runs_test': args.mc_runs_test,
         'temp': args.t,
         'epochs': args.epochs,
         'kd': args.distill,
@@ -56,14 +41,12 @@ def main(args):
         'timestamp': date
     }
 
-    # log_params의 항목들을 key=value 형식으로 자동으로 조합하여 log_path 구성
     params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type']])
     
     log_path = f"runs/{log_params['data']}/{log_params['model']}/{log_params['date']}/{log_params['type']}/{params_str}"
     
     writer = SummaryWriter(log_path)
     
-    # assert args.distill or args.martern or args.moped or args.multi_moped, "Please specify the unique method"
     if args.distill:
         print("Distillation is used")
         dnn_model = get_model(args, distill=True)
@@ -89,27 +72,21 @@ def main(args):
         print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
         model = Multivariate_MOPED(dnn = dnn_model, bnn = model, device = device)
     
-
-    # Optimizer
     optim = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    # Learning rate scheduler
-    # args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[args.epochs], gamma=1.0) # Never decay the learning rate
-    
     if args.type == 'dnn':
 
         if args.prune:
             model.load_state_dict(torch.load(args.weight))
             args.best_acc, args.best_nll = test_DNN(model, test_loader)
             args.total_epoch = 0
+            
             for i in range(100):
 
                 args.prune_iter = i
 
-                # Pruning step
                 prune_model(model, sparsity=i/100.0)
                 
-                # Training
                 train_DNN(epoch=args.epochs, 
                         model=model, 
                         train_loader=train_loader, 
@@ -136,7 +113,8 @@ def main(args):
                   train_loader=train_loader, 
                   test_loader=test_loader, 
                   optimizer=optim, 
-                  mc_runs=args.mc_runs, 
+                  mc_runs_train=args.mc_runs_train, 
+                  mc_runs_test=args.mc_runs_test,
                   bs=args.bs, 
                   writer=writer,
                   device=device,
@@ -144,12 +122,14 @@ def main(args):
 
 if __name__ == '__main__':
     
-    parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
-    parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train')
-    parser.add_argument('--mc_runs', type=int, default=30, help='Number of Monte Carlo runs')
+    parser = argparse.ArgumentParser(description='Train a Neural Network')
+    parser.add_argument('--epochs', type=int, default=500, help='Number of epochs to train')
+    parser.add_argument('--mc_runs_train', type=int, default=1, help='Number of Monte Carlo runs for train')
+    parser.add_argument('--mc_runs_test', type=int, default=50, help='Number of Monte Carlo runs test')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
-    parser.add_argument('--bs', type=int, default=128, help='Batch size')
+    parser.add_argument('--bs', type=int, default=512, help='Batch size')
     parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20, resnet56, resnet110]')
+    parser.add_argument('--augmentaiton', type = bool, default = False, help = 'Augmentaiton')
     parser.add_argument('--type', type=str, default='dnn', help='Type of model [dnn, uni, multi]')
     parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
     parser.add_argument('--t', type=float, default=1.0, help='Cold Posterior temperature')
