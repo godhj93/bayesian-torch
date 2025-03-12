@@ -6,6 +6,7 @@ from torch.utils.tensorboard import SummaryWriter
 import datetime
 from termcolor import colored
 import torch.nn.utils.prune as prune
+import json
 
 def prune_model(model, sparsity):
     for name, module in model.named_modules():
@@ -46,6 +47,11 @@ def main(args):
     log_path = f"runs/{log_params['data']}/{log_params['model']}/{log_params['date']}/{log_params['type']}/{params_str}"
     
     writer = SummaryWriter(log_path)
+    
+    # Save the arguments
+    with open(f"{log_path}/config.txt", "w") as f:
+        for key, value in vars(args).items():
+            f.write(f"{key}: {value}\n")
     
     if args.distill:
         print("Distillation is used")
@@ -127,7 +133,7 @@ if __name__ == '__main__':
     parser.add_argument('--mc_runs_train', type=int, default=1, help='Number of Monte Carlo runs for train')
     parser.add_argument('--mc_runs_test', type=int, default=50, help='Number of Monte Carlo runs test')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
-    parser.add_argument('--bs', type=int, default=512, help='Batch size')
+    parser.add_argument('--bs', type=int, default=128, help='Batch size')
     parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20, resnet56, resnet110]')
     parser.add_argument('--augmentaiton', type = bool, default = False, help = 'Augmentaiton')
     parser.add_argument('--type', type=str, default='dnn', help='Type of model [dnn, uni, multi]')
