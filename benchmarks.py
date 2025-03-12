@@ -1,4 +1,4 @@
-from utils import get_model, get_dataset
+from utils.utils import get_model, get_dataset
 import argparse
 from termcolor import colored
 import torch

@@ -7,7 +7,11 @@ from termcolor import colored
 from bayesian_torch.models.dnn_to_bnn import get_kl_loss
 
 # Models
-from models import SimpleCNN, SimpleCNN_uni, SimpleCNN_multi, LeNet5, LeNet5_uni, LeNet5_multi, VGG7, VGG7_uni, VGG7_multi, resnet20_multi
+# from models import SimpleCNN, SimpleCNN_uni, SimpleCNN_multi, LeNet5, LeNet5_uni, LeNet5_multi, VGG7, VGG7_uni, VGG7_multi, resnet20_multi, densenet_bc_30
+from utils.models.resnet_multi import resnet20_multi
+from utils.models.densenet_dnn import densenet_bc_30
+from utils.models.densenet_uni import densenet_bc_30_uni
+from utils.models.mobilenetv2_dnn import MobileNetV2_dnn
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
@@ -286,39 +290,39 @@ def get_model(args, distill=False):
         elif args.model == 'resnet20':
             model = resnet20_deterministic()
             
+        elif args.model == 'densenet30':
+            model = densenet_bc_30()
+            
+        elif args.model == 'mobilenetv2':
+            model = MobileNetV2_dnn(num_classes=10, width_mult=1.0)
+            
         else:
             raise ValueError('Model not found')
         
     elif args.type == 'uni':
-        
-        if args.model == 'simple':
-            model = SimpleCNN_uni()
             
-        elif args.model == 'lenet':
-            model = LeNet5_uni()
-            
-        elif args.model == 'vgg7':
-            model = VGG7_uni()
-            
-        elif args.model == 'resnet20':
+        if args.model == 'resnet20':
             model = resnet20_uni()
+            
+        elif args.model == 'densenet30':
+            model = densenet_bc_30_uni()
+            
+        elif args.model == 'mobilenetv2':
+            model = MobileNetV2_uni(num_classes=10, width_mult=1.0)
             
         else:
             raise ValueError('Model not found')
         
     elif args.type == 'multi':
-        
-        if args.model == 'simple':
-            model = SimpleCNN_multi()
             
-        elif args.model == 'lenet':
-            model = LeNet5_multi()
-            
-        elif args.model == 'vgg7':
-            model = VGG7_multi()
-            
-        elif args.model == 'resnet20':
+        if args.model == 'resnet20':
             model = resnet20_multi()
+            
+        elif args.model == 'densenet30':
+            NotImplementedError("Not implemented yet")
+            
+        elif args.model == 'mobilenetv2':
+            NotImplementedError("Not implemented yet")
             
         else:
             raise ValueError('Model not found')
@@ -405,7 +409,7 @@ def get_model(args, distill=False):
     return model
 
 def get_dataset(args):
-    print(colored(f"Data augmentaion is disabled", 'red'))
+    
     if args.data == 'mnist':
         
         # Simple data augmentation 

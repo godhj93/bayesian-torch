@@ -1,5 +1,5 @@
 from models import *
-from utils import test_BNN, test_DNN
+from utils.utils import test_BNN, test_DNN
 import argparse
 from termcolor import colored
 import torch

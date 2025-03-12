@@ -1,5 +1,5 @@
 import torch
-from utils import train_DNN, train_BNN, get_model, get_dataset, test_DNN
+from utils.utils import train_DNN, train_BNN, get_model, get_dataset, test_DNN
 from distill import distill, set_martern_prior, Multivariate_MOPED
 import argparse
 from torch.utils.tensorboard import SummaryWriter
