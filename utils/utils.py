@@ -12,6 +12,7 @@ from utils.models.resnet_multi import resnet20_multi
 from utils.models.densenet_dnn import densenet_bc_30
 from utils.models.densenet_uni import densenet_bc_30_uni
 from utils.models.mobilenetv2_dnn import MobileNetV2_dnn
+from utils.models.vgg_dnn import VGG7
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
@@ -223,7 +224,7 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
         
         if args.prune:
 
-            if best_loss <= args.best_nll or acc_test >= args.best_acc:
+            if best_loss <= args.best_nll:  #or acc_test >= args.best_acc:
                 print(colored(f"Early stopping at epoch {e+1}", 'light_cyan'))
                 args.total_epoch += e + 1
                 save_path = os.path.join(writer.log_dir, f'pruned_model_iter_{args.prune_iter}.pth')
@@ -296,6 +297,8 @@ def get_model(args, distill=False):
         elif args.model == 'mobilenetv2':
             model = MobileNetV2_dnn(num_classes=10, width_mult=1.0)
             
+        elif args.model == 'vgg7':
+            model = VGG7()
         else:
             raise ValueError('Model not found')
         
