@@ -63,6 +63,11 @@ def main(args):
     
     writer = SummaryWriter(log_path)
     
+    # Save the arguments
+    with open(f"{log_path}/config.txt", "w") as f:
+        for key, value in vars(args).items():
+            f.write(f"{key}: {value}\n")
+                                
     # assert args.distill or args.martern or args.moped or args.multi_moped, "Please specify the unique method"
     if args.distill:
         print("Distillation is used")
@@ -147,7 +152,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train')
     parser.add_argument('--mc_runs', type=int, default=1, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
-    parser.add_argument('--bs', type=int, default=512, help='Batch size')
+    parser.add_argument('--bs', type=int, default=128, help='Batch size')
     parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20]')
     parser.add_argument('--type', type=str, default='dnn', help='Type of model [dnn, uni, multi]')
     parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
