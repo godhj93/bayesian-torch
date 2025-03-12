@@ -13,6 +13,7 @@ from utils.models.densenet_dnn import densenet_bc_30
 from utils.models.densenet_uni import densenet_bc_30_uni
 from utils.models.mobilenetv2_dnn import MobileNetV2_dnn
 from utils.models.vgg_dnn import VGG7
+from utils.models.vgg_uni import VGG7_uni
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
@@ -313,6 +314,8 @@ def get_model(args, distill=False):
         elif args.model == 'mobilenetv2':
             model = MobileNetV2_uni(num_classes=10, width_mult=1.0)
             
+        elif args.model == 'vgg7':
+            model = VGG7_uni()
         else:
             raise ValueError('Model not found')
         
