@@ -1,24 +1,18 @@
 import torch
 import torch.optim as optim
-from utils import get_dataset, get_model, test_DNN, train_BNN
+import numpy as np
+import matplotlib.pyplot as plt
+from utils.utils import get_dataset, get_model, test_DNN, test_BNN, train_BNN
 from distill import get_conv_layers
 import argparse
 from termcolor import colored
+import copy
 
 def main(args):
+
+    args_dnn = copy.deepcopy(args)
+    args_dnn.type = 'dnn'
     
-    class opt:
-        
-        type = 'dnn'
-        model = 'resnet20'
-        moped = False
-        multi_moped = False
-        multi_gpu = False
-        data = 'cifar'
-        bs = 128
-        augmentaiton = False
-        
-    args_dnn = opt()            
     dnn = get_model(args_dnn)
     ckpt = torch.load(args.weight)
     dnn.load_state_dict(ckpt)
@@ -26,11 +20,7 @@ def main(args):
     args_dnn.augmentaiton = args.augmentaiton
     train_loader, test_loader = get_dataset(args_dnn)
 
-    args_bnn = opt()
-    args_bnn.type = args.type
-    args_bnn.t = args.t
-    args_bnn.bs = args.bs
-    bnn = get_model(args_bnn)
+    bnn = get_model(args)
 
     acc, loss = test_DNN(dnn, test_loader)
     print(colored(f"Acc: {acc:.2f}%, Loss: {loss:.4f}", 'green'))
@@ -44,7 +34,8 @@ def main(args):
             zero += torch.sum(param == 0).item()
     sparsity = zero/total
     print(f"Sparsity: {sparsity*100:.2f}%")
-
+    args.sparsity = sparsity  
+    
     dnn_conv_layers = get_conv_layers(dnn)
     bnn_conv_layers = get_conv_layers(bnn)
 
@@ -60,21 +51,20 @@ def main(args):
     date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
     log_params = {
-        'data': args.data,
+        'data': 'cifar',
         'model': args.model,
         'date': date.split('-')[0],
-        'type': args.type,
+        'type': 'uni',
         'bs': args.bs,
         'lr': args.lr,
-        'mc_runs_train': args.mc_runs_train,
-        'mc_runs_test': args.mc_runs_test,
+        'mc_runs': args.mc_runs,
         'temp': args.t,
         'epochs': args.epochs,
-        'kd': True,
-        'martern': True,
-        'alpha': 0,
-        'moped': False,
-        'multi_moped': False,
+        'kd': args.distill,
+        'martern': args.martern,
+        'alpha': args.alpha,
+        'moped': args.moped,
+        'multi_moped': args.multi_moped,
         'timestamp': date,
         'sparsity': sparsity
         }
@@ -85,6 +75,11 @@ def main(args):
         
     writer = SummaryWriter(log_path)
 
+    # Save the arguments
+    with open(f"{log_path}/config.txt", "w") as f:
+        for key, value in vars(args).items():
+            f.write(f"{key}: {value}\n")
+            
     train_BNN(
         epoch = args.epochs,
         model = bnn.cuda(),
@@ -92,22 +87,21 @@ def main(args):
         test_loader = test_loader,
         optimizer = optim.Adam(bnn.parameters(), lr=1e-3),
         writer = writer,
-        mc_runs_train = args.mc_runs_train,
-        mc_runs_test = args.mc_runs_test,
+        mc_runs = args.mc_runs,
         bs = args.bs,
         device = 'cuda',
-        args = args_bnn   
+        args = args
+        
     )
 
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
     parser.add_argument('--epochs', type=int, default=500, help='Number of epochs to train')
-    parser.add_argument('--mc_runs_train', type=int, default=1, help='Number of Monte Carlo runs for trian')
-    parser.add_argument('--mc_runs_test', type=int, default=50, help='Number of Monte Carlo runs for test')
+    parser.add_argument('--mc_runs', type=int, default=1, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
-    parser.add_argument('--bs', type=int, default=512, help='Batch size')
-    parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20, resnet56, resnet110]')
+    parser.add_argument('--bs', type=int, default=128, help='Batch size')
+    parser.add_argument('--model', type=str, help='Model to train [simple, lenet, vgg7, resnet20]')
     parser.add_argument('--type', type=str, default='uni', help='Type of model [dnn, uni, multi]')
     parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
     parser.add_argument('--t', type=float, default=1.0, help='Cold Posterior temperature')

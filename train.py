@@ -1,5 +1,5 @@
 import torch
-from utils import train_DNN, train_BNN, get_model, get_dataset, test_DNN
+from utils.utils import train_DNN, train_BNN, get_model, get_dataset, test_DNN
 from distill import distill, set_martern_prior, Multivariate_MOPED
 import argparse
 from torch.utils.tensorboard import SummaryWriter
@@ -52,7 +52,8 @@ def main(args):
     with open(f"{log_path}/config.txt", "w") as f:
         for key, value in vars(args).items():
             f.write(f"{key}: {value}\n")
-    
+                                
+    # assert args.distill or args.martern or args.moped or args.multi_moped, "Please specify the unique method"
     if args.distill:
         print("Distillation is used")
         dnn_model = get_model(args, distill=True)
@@ -128,14 +129,12 @@ def main(args):
 
 if __name__ == '__main__':
     
-    parser = argparse.ArgumentParser(description='Train a Neural Network')
+    parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
     parser.add_argument('--epochs', type=int, default=500, help='Number of epochs to train')
-    parser.add_argument('--mc_runs_train', type=int, default=1, help='Number of Monte Carlo runs for train')
-    parser.add_argument('--mc_runs_test', type=int, default=50, help='Number of Monte Carlo runs test')
+    parser.add_argument('--mc_runs', type=int, default=1, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--bs', type=int, default=128, help='Batch size')
-    parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20, resnet56, resnet110]')
-    parser.add_argument('--augmentaiton', type = bool, default = False, help = 'Augmentaiton')
+    parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20]')
     parser.add_argument('--type', type=str, default='dnn', help='Type of model [dnn, uni, multi]')
     parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
     parser.add_argument('--t', type=float, default=1.0, help='Cold Posterior temperature')

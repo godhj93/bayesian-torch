@@ -6,14 +6,22 @@ import os
 from termcolor import colored
 from bayesian_torch.models.dnn_to_bnn import get_kl_loss
 
-from models import SimpleCNN, SimpleCNN_uni, SimpleCNN_multi, LeNet5, LeNet5_uni, LeNet5_multi, VGG7, VGG7_uni, VGG7_multi, resnet20_multi
+# Models
+# from models import SimpleCNN, SimpleCNN_uni, SimpleCNN_multi, LeNet5, LeNet5_uni, LeNet5_multi, VGG7, VGG7_uni, VGG7_multi, resnet20_multi, densenet_bc_30
+from utils.models.resnet_multi import resnet20_multi
+from utils.models.densenet_dnn import densenet_bc_30
+from utils.models.densenet_uni import densenet_bc_30_uni
+from utils.models.mobilenetv2_dnn import MobileNetV2_dnn
+from utils.models.vgg_dnn import VGG7
+from utils.models.vgg_uni import VGG7_uni
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
 from bayesian_torch.layers.variational_layers.conv_variational import Conv2dReparameterization, Conv2dReparameterization_Multivariate
-
+# Dataset
 from torchvision import datasets, transforms
 
+# Distirbuted Data Parallel
 from torch.nn.parallel import DistributedDataParallel as DDP
 import os 
 import torch.distributed as dist
@@ -21,10 +29,8 @@ from torch.utils.data import DistributedSampler
 from torchvision.datasets import ImageFolder
 
 import torch.nn.utils.prune as prune
-import urllib
-import zipfile
 
-def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs_train, mc_runs_test, bs, device):
+def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs, bs, device):
 
     model.to(device)
     best_loss = torch.inf
@@ -32,6 +38,8 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     best_acc = 0
     
     for e in range(epoch):
+        if args.train_sampler:
+            args.train_sampler.set_epoch(e)            
             
         model.train()
         nll_total = []
@@ -40,14 +48,13 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
         total = 0
         
         pbar = tqdm(enumerate(train_loader))
-
         for batch_idx, (data, target) in pbar:
 
             data, target = data.to(device), target.to(device)
             outputs =[]
             kls = []
             
-            for _ in range(mc_runs_train):
+            for _ in range(mc_runs):
                 if not args.moped:
                     output, kl = model(data)
                     outputs.append(output)
@@ -65,7 +72,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
             nll = F.cross_entropy(output, target)
             
-            loss = nll * (1/args.t) + kl_loss / bs
+            loss = nll * (1/args.t) + kl_loss / bs # args.t: Cold posterior temperature
             # loss = nll
             optimizer.zero_grad()
             loss.backward()
@@ -80,9 +87,12 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
             pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):,}", 'blue'))
             
-        acc_test, nll, kl = test_BNN(model, test_loader, mc_runs_test, bs, device, args.moped)
+        acc_test, nll, kl = test_BNN(model, test_loader, mc_runs, bs, device, args.moped)
         print(colored(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}", 'yellow'))
         
+        # args.scheduler.step()
+        # print(colored(f"Learning rate: {optimizer.param_groups[0]['lr']}", 'red'))
+        # Tensorboard
         writer.add_scalar('Train/accuracy', acc, e)
         writer.add_scalar('Train/loss/NLL', np.mean(nll_total), e)
         writer.add_scalar('Train/loss/KL', np.mean(kl_total), e)
@@ -93,9 +103,14 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
         writer.add_scalar('Test/loss/KL', kl, e)
         writer.add_scalar('Test/loss/total', nll + kl, e)
         
+        # Evaluate the best model by the total loss (test)
         if best_loss > nll + kl:
             best_loss = nll + kl
             
+            # Remove Multi-GPU
+            # if torch.cuda.device_count() > 1:
+            #     torch.save(model.module.state_dict(), os.path.join(writer.log_dir, 'best_model.pth'))
+            # else:
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_model.pth'))    
             
             print(colored(f"Best model saved at epoch {e}", 'green'))
@@ -113,14 +128,15 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
     print(colored(f"Last model saved", 'green'))
 
-def test_BNN(model, test_loader, mc_runs_test, bs, device, moped=False):
+def test_BNN(model, test_loader, mc_runs, bs, device, moped=False):
     model.eval()
     correct = 0
     total = 0
     nll_total = []
     kl_total = []
-
-    print(colored(f"MC runs: {mc_runs_test}", 'red'))
+    
+    mc_runs = 30
+    print(colored(f"MC runs: {mc_runs}", 'red'))
     with torch.no_grad():
         
         for data, target in tqdm(test_loader, desc='Testing'):
@@ -128,7 +144,7 @@ def test_BNN(model, test_loader, mc_runs_test, bs, device, moped=False):
             
             outputs = []
             kls = []
-            for _ in range(mc_runs_test):
+            for _ in range(mc_runs):
                 if not moped:
                     output, kl = model(data)
                     outputs.append(output)
@@ -163,6 +179,9 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
     total = 0
     best_loss = torch.inf
     
+    # ReduceOnPlateau
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=100, verbose=True)
+    
     for e in range(epoch):
         
         pbar = tqdm(enumerate(train_loader), total=len(train_loader), ncols=0)
@@ -185,7 +204,12 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
         
         acc_test, nll_test = test_DNN(model, test_loader)
         
+        scheduler.step(nll_test)
+        
         print(colored(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}", 'yellow'))
+        
+        # args.scheduler.step()
+        # print(colored(f"Learning rate: {optimizer.param_groups[0]['lr']}", 'red'))
         
         if args.prune:
             writer.add_scalar('Train/accuracy', acc_train, e + 1 + args.total_epoch)
@@ -206,7 +230,7 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
         
         if args.prune:
 
-            if best_loss <= args.best_nll or acc_test >= args.best_acc:
+            if best_loss <= args.best_nll:  #or acc_test >= args.best_acc:
                 print(colored(f"Early stopping at epoch {e+1}", 'light_cyan'))
                 args.total_epoch += e + 1
                 save_path = os.path.join(writer.log_dir, f'pruned_model_iter_{args.prune_iter}.pth')
@@ -237,14 +261,22 @@ def test_DNN(model, test_loader):
     return correct / total, np.mean(nlls)
 
 
-def save_pruned_model(model, save_path):    
+def save_pruned_model(model, save_path):
+    """
+    Save the pruned model with masks removed.
+    Args:
+        model (torch.nn.Module): The model to save.
+        save_path (str): Path to save the model.
+    """
+    # Remove pruning masks before saving
     for name, module in model.named_modules():
         if hasattr(module, "weight") and hasattr(module, "weight_orig"):
             prune.remove(module, "weight")
     
-    
+    # Save the model's state_dict
     torch.save(model.state_dict(), save_path)
-    
+    # print(f"Pruned model saved (masks removed) at: {save_path}")
+
 def get_model(args, distill=False):
     
     if distill:
@@ -265,39 +297,43 @@ def get_model(args, distill=False):
         elif args.model == 'resnet20':
             model = resnet20_deterministic()
             
+        elif args.model == 'densenet30':
+            model = densenet_bc_30()
+            
+        elif args.model == 'mobilenetv2':
+            model = MobileNetV2_dnn(num_classes=10, width_mult=1.0)
+            
+        elif args.model == 'vgg7':
+            model = VGG7()
         else:
             raise ValueError('Model not found')
         
     elif args.type == 'uni':
-        
-        if args.model == 'simple':
-            model = SimpleCNN_uni()
             
-        elif args.model == 'lenet':
-            model = LeNet5_uni()
+        if args.model == 'resnet20':
+            model = resnet20_uni()
+            
+        elif args.model == 'densenet30':
+            model = densenet_bc_30_uni()
+            
+        elif args.model == 'mobilenetv2':
+            model = MobileNetV2_uni(num_classes=10, width_mult=1.0)
             
         elif args.model == 'vgg7':
             model = VGG7_uni()
-            
-        elif args.model == 'resnet20':
-            model = resnet20_uni()
-            
         else:
             raise ValueError('Model not found')
         
     elif args.type == 'multi':
-        
-        if args.model == 'simple':
-            model = SimpleCNN_multi()
             
-        elif args.model == 'lenet':
-            model = LeNet5_multi()
-            
-        elif args.model == 'vgg7':
-            model = VGG7_multi()
-            
-        elif args.model == 'resnet20':
+        if args.model == 'resnet20':
             model = resnet20_multi()
+            
+        elif args.model == 'densenet30':
+            NotImplementedError("Not implemented yet")
+            
+        elif args.model == 'mobilenetv2':
+            NotImplementedError("Not implemented yet")
             
         else:
             raise ValueError('Model not found')
@@ -308,8 +344,8 @@ def get_model(args, distill=False):
         "prior_sigma": 1.0,
         "posterior_mu_init": 0.0,
         "posterior_rho_init": -3.0,
-        "type": "Reparameterization",  
-        "moped_enable": True,  
+        "type": "Reparameterization",  # Flipout or Reparameterization
+        "moped_enable": True,  # initialize mu/sigma from the dnn weights
         "moped_delta": 0.2,
         }
         
@@ -321,18 +357,24 @@ def get_model(args, distill=False):
     elif args.multi_moped:
         
         args.type = 'multi'
+    
+    # if args.distill or args.martern:
+    #     args.type = 'multi'
         
+    # Check the number of parameters
     print(f"Total number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
     
     if torch.cuda.device_count() > 1 and args.multi_gpu:      
         device = 'cuda'  
-        
+        # DDP 초기화
         local_rank = int(os.environ.get('LOCAL_RANK', 0))
         dist.init_process_group(backend='nccl', init_method='env://')
         
+        # Set device
         torch.cuda.set_device(local_rank)
         device = torch.device(f'cuda:{local_rank}')
         
+        # 모델을 DDP로 래핑
         model = DDP(model.to(device), device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False)
         print(colored(f"Model is wrapped by DDP", 'red'))
     
@@ -378,216 +420,92 @@ def get_model(args, distill=False):
     return model
 
 def get_dataset(args):
-
-    #---------------------------------------------------------------------------------#
-    #--------------------------------Data Augmentation--------------------------------#
-    #---------------------------------------------------------------------------------#
-    if args.augmentaiton:
-        print(colored(f"Data augmentaion is activate", 'red'))
-        if args.data == 'mnist':
-            trasform_train = transforms.Compose([
-                transforms.RandomCrop(28, padding=4),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomVerticalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize((0.1307,), (0.3081,))
-            ])
-            transform_test = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.1307,), (0.3081,))
-            ])
-            
-            train_dataset = datasets.MNIST(root='./data/', train=True, transform=trasform_train, download=True)
-            test_dataset = datasets.MNIST(root='./data/', train=False, transform=transform_test)
-        
-        elif args.data == 'cifar':
-            print(colored(f"CIFAR-10 dataset is loaded", 'green'))
-            transform_train = transforms.Compose([
-                transforms.RandomCrop(32, padding=4),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomVerticalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-            ])
-            transoform_test = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-            ])
-
-            train_dataset = datasets.CIFAR10(root='./data/', train=True, transform=transform_train, download=True)
-            test_dataset = datasets.CIFAR10(root='./data/', train=False, transform=transoform_test)
-        
-        elif args.data == 'tinyimagenet':
-            print(colored(f"Tiny ImageNet dataset is loaded", 'red'))
-            transform_train = transforms.Compose([
-                transforms.RandomCrop(32, padding=4),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomVerticalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-
-            ])
-            
-            transoform_test = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-
-            ])
-
-            train_dataset = ImageFolder(root='./tiny-imagenet-200/train/', transform = transform_train)
-            test_dataset = ImageFolder(root='./tiny-imagenet-200/val/', transform = transoform_test)
-        
-        elif args.data == 'svhn':
-            print(colored(f"SVHN dataset is loaded", 'blue'))
-            
-            transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)),
-            ])
-            
-            train_dataset = datasets.SVHN(root='./data/', split='train', transform=transform, download=True)
-            test_dataset = datasets.SVHN(root='./data/', split='test', transform=transform, download=True)
-        
-        elif args.data == 'tinyimagenet':
-            print(colored("Tiny ImageNet dataset is loaded", "red"))
-            
-            data_dir = "./tiny-imagenet-200"
-            download_tiny_imagenet(data_dir)
-
-            transform_train = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-            ])
-            transform_test = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-            ])
-
-            train_dataset = ImageFolder(root=os.path.join(data_dir, "tiny-imagenet-200/train"), transform=transform_train)
-            test_dataset = ImageFolder(root=os.path.join(data_dir, "tiny-imagenet-200/val"), transform=transform_test)
-
-        
-        else:
-            raise ValueError('Dataset not found')
-
-        train_loader = torch.utils.data.DataLoader(
-            dataset=train_dataset,
-            batch_size=args.bs,
-            shuffle=True
-        )
-
-        test_loader = torch.utils.data.DataLoader(
-            dataset=test_dataset,
-            batch_size=args.bs,
-            shuffle=False
-        )
-
-        return train_loader, test_loader
     
-    #---------------------------------------------------------------------------------#
-    #------------------------------No Data Augmentation-------------------------------#
-    #---------------------------------------------------------------------------------#
+    if args.data == 'mnist':
+        
+        # Simple data augmentation 
+        trasform_train = transforms.Compose([
+            transforms.RandomCrop(28, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        transform_test = transforms.Compose([
+            # transforms.Resize((32, 32)),
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        
+        train_dataset = datasets.MNIST(root='./data/', train=True, transform=trasform_train, download=True)
+        test_dataset = datasets.MNIST(root='./data/', train=False, transform=transform_test)
+        
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
     
+    elif args.data == 'cifar':
+        print(colored(f"CIFAR-10 dataset is loaded", 'green'))
+        # Simple data augmentation
+        transform_train = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            # transforms.RandomVerticalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ])
+        transoform_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ])
+        # CIFAR dataset
+        train_dataset = datasets.CIFAR10(root='./data/', train=True, transform=transform_train, download=True)
+        test_dataset = datasets.CIFAR10(root='./data/', train=False, transform=transoform_test)
+        
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
+    
+    elif args.data == 'tinyimagenet':
+        print(colored(f"Tiny ImageNet dataset is loaded", 'red'))
+        transform_train = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+
+        ])
+        
+        transoform_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+
+        ])
+        train_dataset = ImageFolder(root='./tiny-imagenet-200/train/', transform = transform_train)
+        test_dataset = ImageFolder(root='./tiny-imagenet-200/val/', transform = transoform_test)
+        
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
+         
     else:
-        print(colored(f"Data augmentation is disabled", 'red'))
-
-        if args.data == 'mnist':
-            transform_train = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.1307,), (0.3081,))
-            ])
-            transform_test = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.1307,), (0.3081,))
-            ])
-            
-            train_dataset = datasets.MNIST(root='./data/', train=True, transform=transform_train, download=True)
-            test_dataset = datasets.MNIST(root='./data/', train=False, transform=transform_test)
+        raise ValueError('Dataset not found')
+    
+    if torch.cuda.device_count() > 1 and args.multi_gpu:
         
-        elif args.data == 'cifar':
-            
-            print(colored(f"CIFAR-10 dataset is loaded", 'green'))
-
-            transform_train = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-            ])
-            transform_test = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-            ])
-            
-            train_dataset = datasets.CIFAR10(root='./data/', train=True, transform=transform_train, download=True)
-            test_dataset = datasets.CIFAR10(root='./data/', train=False, transform=transform_test)
+        # DDP 초기화
+        local_rank = int(os.environ.get('LOCAL_RANK', 0))
+        dist.init_process_group(backend='nccl', init_method='env://')
         
-        elif args.data == 'svhn':
-            print(colored(f"SVHN dataset is loaded", 'blue'))
-            
-            transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)),
-            ])
-            
-            train_dataset = datasets.SVHN(root='./data/', split='train', transform=transform, download=True)
-            test_dataset = datasets.SVHN(root='./data/', split='test', transform=transform, download=True)
+        # Set device
+        torch.cuda.set_device(local_rank)
+        device = torch.device(f'cuda:{local_rank}')
         
-        elif args.data == 'tinyimagenet':
-            print(colored("Tiny ImageNet dataset is loaded", "red"))
-            
-            data_dir = "./tiny-imagenet-200"
-            download_tiny_imagenet(data_dir)
-
-            transform_train = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-            ])
-            transform_test = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-            ])
-
-            from torchvision.datasets import ImageFolder
-            train_dataset = ImageFolder(root=os.path.join(data_dir, "tiny-imagenet-200/train"), transform=transform_train)
-            test_dataset = ImageFolder(root=os.path.join(data_dir, "tiny-imagenet-200/val"), transform=transform_test)
-        
-        else:
-            raise ValueError('Dataset not found')
-
-        train_loader = torch.utils.data.DataLoader(
-            dataset=train_dataset,
-            batch_size=args.bs,
-            shuffle=True
-        )
-
-        test_loader = torch.utils.data.DataLoader(
-            dataset=test_dataset,
-            batch_size=args.bs,
-            shuffle=False
-        )
-            
+        # DistributedSampler 설정
+        args.train_sampler = DistributedSampler(train_dataset)
+        args.test_sampler = DistributedSampler(test_dataset, shuffle=False)
+        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.bs, sampler=args.train_sampler, num_workers=4, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.bs, sampler=args.test_sampler, num_workers=4, pin_memory=True)
         print(colored(f"Data is wrapped by DistributedSampler", 'red'))
 
-        return train_loader, test_loader
-
-def download_tiny_imagenet(data_dir='./tiny-imagenet-200'):
-    """Tiny ImageNet을 다운로드하고 압축을 해제하는 함수"""
-    url = "http://cs231n.stanford.edu/tiny-imagenet-200.zip"
-    zip_path = os.path.join(data_dir, "tiny-imagenet-200.zip")
-    
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
-
-    if not os.path.exists(os.path.join(data_dir, "train")) or not os.path.exists(os.path.join(data_dir, "val")):
-        print(colored("Downloading Tiny ImageNet dataset...", "yellow"))
-        urllib.request.urlretrieve(url, zip_path)
-
-        print(colored("Extracting Tiny ImageNet dataset...", "yellow"))
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(data_dir)
-
-        os.remove(zip_path)
-        print(colored("Tiny ImageNet dataset is ready!", "green"))
-    else:
-        print(colored("Tiny ImageNet dataset already exists.", "green"))
+    return train_loader, test_loader
     
     
