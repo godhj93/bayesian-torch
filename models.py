@@ -323,11 +323,3 @@ def resnet56_multi():
 
 def resnet110_multi():
     return ResNet_multivariate(BasicBlock_multi, [18, 18, 18])
-
-
-
-    
-    
-        
-        
-            

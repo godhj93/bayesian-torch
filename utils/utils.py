@@ -135,7 +135,7 @@ def test_BNN(model, test_loader, mc_runs, bs, device, moped=False):
     nll_total = []
     kl_total = []
     
-    mc_runs = 50 
+    mc_runs = 30
     print(colored(f"MC runs: {mc_runs}", 'red'))
     with torch.no_grad():
         
@@ -179,6 +179,9 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
     total = 0
     best_loss = torch.inf
     
+    # ReduceOnPlateau
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=100, verbose=True)
+    
     for e in range(epoch):
         
         pbar = tqdm(enumerate(train_loader), total=len(train_loader), ncols=0)
@@ -200,6 +203,8 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc_train:.3f}, NLL: {np.mean(nlls):.3f}, LR: {optimizer.param_groups[0]['lr']:.5f}", 'blue'))
         
         acc_test, nll_test = test_DNN(model, test_loader)
+        
+        scheduler.step(nll_test)
         
         print(colored(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}", 'yellow'))
         

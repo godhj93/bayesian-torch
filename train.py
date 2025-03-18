@@ -149,7 +149,7 @@ def main(args):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
-    parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train')
+    parser.add_argument('--epochs', type=int, default=500, help='Number of epochs to train')
     parser.add_argument('--mc_runs', type=int, default=1, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--bs', type=int, default=128, help='Batch size')
