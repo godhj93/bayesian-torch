@@ -87,7 +87,9 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
             pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):,}", 'blue'))
             
-        acc_test, nll, kl = test_BNN(model, test_loader, mc_runs, bs, device, args.moped)
+        acc_test, nll, kl = test_BNN(model, test_loader, bs, device, args.moped, mc_runs)
+
+        # acc_test, nll, kl = test_BNN(model, test_loader, mc_runs, bs, device, args.moped)
         print(colored(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}", 'yellow'))
         
         # args.scheduler.step()
@@ -129,7 +131,9 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     print(colored(f"Last model saved", 'green'))
 
 def test_BNN(model, test_loader, bs, device, moped=False, mc_runs = 30):
-    model.eval().to(device)
+    
+    model.to(device)
+    model.eval()
     correct = 0
     total = 0
     nll_total = []
