@@ -128,14 +128,14 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
     print(colored(f"Last model saved", 'green'))
 
-def test_BNN(model, test_loader, mc_runs, bs, device, moped=False):
-    model.eval()
+def test_BNN(model, test_loader, bs, device, moped=False, mc_runs = 30):
+    model.eval().to(device)
     correct = 0
     total = 0
     nll_total = []
     kl_total = []
     
-    mc_runs = 30
+    mc_runs = mc_runs
     print(colored(f"MC runs: {mc_runs}", 'red'))
     with torch.no_grad():
         
@@ -180,6 +180,7 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
     best_loss = torch.inf
     
     # ReduceOnPlateau
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=100, verbose=True)
     
     for e in range(epoch):

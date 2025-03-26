@@ -55,10 +55,11 @@ def main(args):
 
     # log_path를 위한 파라미터들을 dict로 구성
     log_params = {
-        'data': 'cifar',
+        'prefix': args.prefix,
+        'data': args.data,
         'model': args.model,
         'date': date.split('-')[0],
-        'type': 'uni',
+        'type': args.type,
         'bs': args.bs,
         'lr': args.lr,
         'mc_runs': args.mc_runs,
@@ -70,7 +71,8 @@ def main(args):
         'moped': args.moped,
         'multi_moped': args.multi_moped,
         'timestamp': date,
-        'sparsity': sparsity
+        'sparsity': sparsity,
+        
         }
 
         # log_params의 항목들을 key=value 형식으로 자동으로 조합하여 log_path 구성
@@ -103,6 +105,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
     parser.add_argument('--epochs', type=int, default=500, help='Number of epochs to train')
+    parser.add_argument('--prefix', type=str, default='', help='Prefix for the log path')
     parser.add_argument('--mc_runs', type=int, default=1, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--bs', type=int, default=128, help='Batch size')
