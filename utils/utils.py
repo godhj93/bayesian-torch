@@ -143,7 +143,7 @@ def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
     nll_total = []
     kl_total = []
     
-    mc_runs = mc_runs
+    mc_runs = 30
     print(colored(f"MC runs: {mc_runs}", 'red'))
     with torch.no_grad():
         
