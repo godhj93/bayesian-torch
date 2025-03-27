@@ -7,6 +7,7 @@ import datetime
 from termcolor import colored
 import torch.nn.utils.prune as prune
 import torch.nn as nn
+import os 
 
 # def prune_model(model, sparsity):
 #     """
@@ -20,13 +21,20 @@ import torch.nn as nn
 #         # if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)):
 #         if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)):
 #             # Apply or update pruning
-#             # prune.l1_unstructured(module, name='weight', amount=sparsity)
+#             prune.l1_unstructured(module, name='weight', amount=sparsity)
 
 #             # Calculate the percentage of weights pruned
 #             pruned_percentage = 1 - float(module.weight_mask.sum()) / module.weight.numel()
-#             print(colored(f"Pruned {name}: {pruned_percentage:.2%} of weights set to 0", 'yellow'))
+#             # print(colored(f"Pruned {name}: {pruned_percentage:.2%} of weights set to 0", 'yellow'))
 #         else:
-#             print(colored(f"Skipping {name}: Not a prunable layer", 'cyan'))
+#             # print(colored(f"Skipping {name}: Not a prunable layer", 'cyan'))
+#             pass
+        
+#     # Calculate the total sparsity in the model
+#     total_params = sum(module.weight.numel() for module in model.modules() if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)))
+#     remaining_params = sum(module.weight_mask.sum() for module in model.modules() if hasattr(module, 'weight_mask'))
+#     total_sparsity = 1 - remaining_params / total_params
+#     print(colored(f"Total sparsity: {total_sparsity:.2%}", 'yellow'))
 
 
 def prune_model(model, sparsity):
@@ -57,21 +65,16 @@ def prune_model(model, sparsity):
             # 프루닝 후 각 모듈에는 'weight_mask' 버퍼가 생성됩니다.
             remaining_params = module.weight_mask.sum().item() if hasattr(module, 'weight_mask') else total_params
             pruned_percentage = 1 - (remaining_params / total_params)
-            print(colored(f"Pruned {name}: {pruned_percentage:.2%} of weights set to 0", 'yellow'))
+            # print(colored(f"Pruned {name}: {pruned_percentage:.2%} of weights set to 0", 'yellow'))
         else:
-            print(colored(f"Skipping {name}: Not a prunable layer", 'cyan'))
+            # print(colored(f"Skipping {name}: Not a prunable layer", 'cyan'))
+            pass
             
-    
-    
-    # Calculate Sparsity
-    total = 0
-    zero = 0
-    for name, param in model.named_parameters():
-        if 'weight' in name:
-            total += param.numel()
-            zero += torch.sum(param == 0).item()
-    sparsity = zero/total
-    print(f"Sparsity: {sparsity*100:.2f}%")
+    # Calculate Total Sparsity in the model
+    total_params = sum(module.weight.numel() for module in model.modules() if isinstance(module, (nn.Conv2d, nn.Linear)))
+    remaining_params = sum(module.weight_mask.sum().item() for module in model.modules() if hasattr(module, 'weight_mask'))
+    total_sparsity = 1 - (remaining_params / total_params)
+    print(colored(f"Total sparsity: {total_sparsity:.2%}", 'yellow'))
     
 def main(args):
 
@@ -152,6 +155,12 @@ def main(args):
         if args.prune:
             model.load_state_dict(torch.load(args.weight))
             args.best_acc, args.best_nll = test_DNN(model, test_loader)
+            print(colored(f"Test accuracy of DNN: {args.best_acc:.4f}, Test NLL: {args.best_nll:.4f}", 'green'))
+            
+            save_path = os.path.join(writer.log_dir, f'original_model.pth')
+            torch.save(model.state_dict(), save_path)
+            print(colored(f"Original model is saved at {save_path}", 'green'))
+            
             args.total_epoch = 0
             for i in range(1, 100):
 
@@ -161,14 +170,14 @@ def main(args):
                 prune_model(model, sparsity=i/100.0)
                 
                 # Training
-                train_DNN(epoch=args.epochs, 
+                if train_DNN(epoch=args.epochs, 
                         model=model, 
                         train_loader=train_loader, 
                         test_loader=test_loader, 
                         optimizer=optim, 
                         writer=writer,
                         device=device,
-                        args=args)
+                        args=args): break
                 
                 
         else:

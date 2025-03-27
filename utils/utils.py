@@ -132,16 +132,12 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
     print(colored(f"Last model saved", 'green'))
 
-<<<<<<< HEAD
-def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
-    
-    model.eval().to(device)
-=======
+
 def test_BNN(model, test_loader, bs, device, moped=False, mc_runs = 30):
     
     model.to(device)
     model.eval()
->>>>>>> bd4fc848c5708c236d340b9d0d0f0808c3f2e6ab
+    
     correct = 0
     total = 0
     nll_total = []
@@ -189,16 +185,14 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
     nlls = []
     correct = 0
     total = 0
+    
     best_loss = torch.inf
+    best_acc = 0
+    best_model_found = False
     
     # ReduceOnPlateau
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=100//5, verbose=True)
-    # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, 
-    #                         max_lr=1e-2, 
-    #                         steps_per_epoch=len(train_loader), 
-    #                         epochs=args.epochs
-    #                     )
     
     for e in range(epoch):
         
@@ -214,8 +208,6 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             loss.backward()
             optimizer.step()
             
-            # scheduler.step() # For OneCycleLR
-
             nlls.append(loss.item())
             correct += (predicted == target).sum().item()
             total += target.size(0)
@@ -228,9 +220,6 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
         scheduler.step(nll_test)
         
         print(colored(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}", 'yellow'))
-        
-        # args.scheduler.step()
-        # print(colored(f"Learning rate: {optimizer.param_groups[0]['lr']}", 'red'))
         
         if args.prune:
             writer.add_scalar('Train/accuracy', acc_train, e + 1 + args.total_epoch)
@@ -251,18 +240,35 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
         
         if args.prune:
 
-            if best_loss <= args.best_nll:  #or acc_test >= args.best_acc:
+            print(colored(f"Original best NLL: {args.best_nll:.4f}, Current NLL: {nll_test:.4f}", 'magenta'))
+            print(colored(f"Original best ACC: {args.best_acc:.4f}, Current ACC: {acc_test:.4f}", 'magenta'))
+            
+            if best_acc <= acc_test:
+                best_acc = acc_test
+            
+            if nll_test <= best_loss:
+                best_loss = nll_test
+            
+            # if best_loss <= args.best_nll and nll_test <= best_loss:  #or acc_test >= args.best_acc:
+            if best_acc >= args.best_acc and acc_test >= best_acc:  #or acc_test >= args.best_acc:
+                
                 print(colored(f"Early stopping at epoch {e+1}", 'light_cyan'))
-                args.total_epoch += e + 1
+                best_model_weight = model.state_dict()
                 save_path = os.path.join(writer.log_dir, f'pruned_model_iter_{args.prune_iter}.pth')
                 save_pruned_model(model, save_path)
-                print(colored(f"Total epoch: {args.total_epoch}", 'light_cyan'))
-                return 
-            elif e == epoch - 1:
-                print(colored(f"Early stopping at epoch since the accuracy does not recovered", 'light_cyan'))
-                return
+                
+                best_model_found = True
+                return False
+            elif e == epoch - 1 and not best_model_found:
+                print(colored(f"Stop at epoch since the NLL does not recovered", 'red'))
+                return True
             
     torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
+    print(colored(f"Last model saved", 'green'))
+    
+    model.load_state_dict(best_model_weight, strict=False)
+    print(colored(f"Best model returned", 'green'))
+    
     
 def test_DNN(model, test_loader):
 
