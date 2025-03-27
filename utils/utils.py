@@ -133,7 +133,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     print(colored(f"Last model saved", 'green'))
 
 
-def test_BNN(model, test_loader, bs, device, moped=False, mc_runs = 30):
+def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
     
     model.to(device)
     model.eval()
