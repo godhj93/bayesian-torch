@@ -90,6 +90,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
             pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):,}", 'blue'))
             
+
         acc_test, nll, kl = test_BNN(model = model, test_loader = test_loader, bs = bs, mc_runs = mc_runs, device = device, args = args)
         print(colored(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}", 'yellow'))
         
@@ -131,9 +132,16 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
     print(colored(f"Last model saved", 'green'))
 
+<<<<<<< HEAD
 def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
     
     model.eval().to(device)
+=======
+def test_BNN(model, test_loader, bs, device, moped=False, mc_runs = 30):
+    
+    model.to(device)
+    model.eval()
+>>>>>>> bd4fc848c5708c236d340b9d0d0f0808c3f2e6ab
     correct = 0
     total = 0
     nll_total = []

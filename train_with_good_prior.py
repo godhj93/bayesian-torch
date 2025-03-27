@@ -13,6 +13,8 @@ import copy
 
 def main(args):
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
     args_dnn = copy.deepcopy(args)
     args_dnn.type = 'dnn'
     
@@ -96,7 +98,7 @@ def main(args):
         writer = writer,
         mc_runs = args.mc_runs,
         bs = args.bs,
-        device = 'cuda',
+        device = device,
         args = args
         
     )
