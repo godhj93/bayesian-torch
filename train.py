@@ -6,26 +6,73 @@ from torch.utils.tensorboard import SummaryWriter
 import datetime
 from termcolor import colored
 import torch.nn.utils.prune as prune
+import torch.nn as nn
+
+# def prune_model(model, sparsity):
+#     """
+#     Prunes the model to achieve the desired sparsity level.
+#     Args:
+#         model (torch.nn.Module): The model to prune.
+#         sparsity (float): Desired sparsity level (0.0 to 1.0).
+#     """
+#     for name, module in model.named_modules():
+#         # Check if the module is a pruning target (Conv2D or Linear layers)
+#         # if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)):
+#         if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)):
+#             # Apply or update pruning
+#             # prune.l1_unstructured(module, name='weight', amount=sparsity)
+
+#             # Calculate the percentage of weights pruned
+#             pruned_percentage = 1 - float(module.weight_mask.sum()) / module.weight.numel()
+#             print(colored(f"Pruned {name}: {pruned_percentage:.2%} of weights set to 0", 'yellow'))
+#         else:
+#             print(colored(f"Skipping {name}: Not a prunable layer", 'cyan'))
+
 
 def prune_model(model, sparsity):
     """
-    Prunes the model to achieve the desired sparsity level.
+    모델 전체의 Conv2d 및 Linear 레이어에 대해 global unstructured pruning을 적용합니다.
     Args:
-        model (torch.nn.Module): The model to prune.
-        sparsity (float): Desired sparsity level (0.0 to 1.0).
+        model (torch.nn.Module): 가지치기할 모델.
+        sparsity (float): 가지치기 비율 (0.0 ~ 1.0). 전체 weight 중 프루닝할 비율.
     """
+    # 프루닝할 (module, parameter) 쌍을 모읍니다.
+    parameters_to_prune = []
     for name, module in model.named_modules():
-        # Check if the module is a pruning target (Conv2D or Linear layers)
-        if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)):
-            # Apply or update pruning
-            prune.l1_unstructured(module, name='weight', amount=sparsity)
-
-            # Calculate the percentage of weights pruned
-            pruned_percentage = 1 - float(module.weight_mask.sum()) / module.weight.numel()
+        if isinstance(module, (nn.Conv2d, nn.Linear)):
+            parameters_to_prune.append((module, 'weight'))
+    
+    # global unstructured pruning을 적용합니다.
+    prune.global_unstructured(
+        parameters_to_prune,
+        # pruning_method=prune.L1Unstructured,
+        pruning_method=prune.L1Unstructured,
+        amount=sparsity,
+    )
+    
+    # 각 모듈별 가지치기 결과 출력
+    for name, module in model.named_modules():
+        if isinstance(module, (nn.Conv2d, nn.Linear)):
+            total_params = module.weight.numel()
+            # 프루닝 후 각 모듈에는 'weight_mask' 버퍼가 생성됩니다.
+            remaining_params = module.weight_mask.sum().item() if hasattr(module, 'weight_mask') else total_params
+            pruned_percentage = 1 - (remaining_params / total_params)
             print(colored(f"Pruned {name}: {pruned_percentage:.2%} of weights set to 0", 'yellow'))
         else:
             print(colored(f"Skipping {name}: Not a prunable layer", 'cyan'))
-
+            
+    
+    
+    # Calculate Sparsity
+    total = 0
+    zero = 0
+    for name, param in model.named_parameters():
+        if 'weight' in name:
+            total += param.numel()
+            zero += torch.sum(param == 0).item()
+    sparsity = zero/total
+    print(f"Sparsity: {sparsity*100:.2f}%")
+    
 def main(args):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -106,7 +153,7 @@ def main(args):
             model.load_state_dict(torch.load(args.weight))
             args.best_acc, args.best_nll = test_DNN(model, test_loader)
             args.total_epoch = 0
-            for i in range(100):
+            for i in range(1, 100):
 
                 args.prune_iter = i
 
@@ -149,8 +196,8 @@ def main(args):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Train a Bayesian Neural Network')
-    parser.add_argument('--epochs', type=int, default=500, help='Number of epochs to train')
-    parser.add_argument('--mc_runs', type=int, default=1, help='Number of Monte Carlo runs')
+    parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train')
+    parser.add_argument('--mc_runs', type=int, default=30, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--bs', type=int, default=128, help='Batch size')
     parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20]')
