@@ -14,6 +14,8 @@ from utils.models.densenet_uni import densenet_bc_30_uni
 from utils.models.mobilenetv2_dnn import MobileNetV2_dnn
 from utils.models.vgg_dnn import VGG7
 from utils.models.vgg_uni import VGG7_uni
+from utils.models.lenet_dnn import LeNet5_dnn
+from utils.models.lenet_uni import LeNet5_uni
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
@@ -37,6 +39,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     best_nll = torch.inf
     best_acc = 0
     
+    
     for e in range(epoch):
         if args.train_sampler:
             args.train_sampler.set_epoch(e)            
@@ -54,7 +57,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             outputs =[]
             kls = []
             
-            for _ in range(mc_runs):
+            for _ in range(1): # For training, mc_runs is set to 1
                 if not args.moped:
                     output, kl = model(data)
                     outputs.append(output)
@@ -87,7 +90,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
             pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):,}", 'blue'))
             
-        acc_test, nll, kl = test_BNN(model, test_loader, mc_runs, bs, device, args.moped)
+        acc_test, nll, kl = test_BNN(model = model, test_loader = test_loader, bs = bs, mc_runs = mc_runs, device = device, args = args)
         print(colored(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}", 'yellow'))
         
         # args.scheduler.step()
@@ -128,7 +131,8 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
     print(colored(f"Last model saved", 'green'))
 
-def test_BNN(model, test_loader, bs, device, moped=False, mc_runs = 30):
+def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
+    
     model.eval().to(device)
     correct = 0
     total = 0
@@ -145,7 +149,7 @@ def test_BNN(model, test_loader, bs, device, moped=False, mc_runs = 30):
             outputs = []
             kls = []
             for _ in range(mc_runs):
-                if not moped:
+                if not args.moped:
                     output, kl = model(data)
                     outputs.append(output)
                     kls.append(kl)
@@ -181,7 +185,12 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
     
     # ReduceOnPlateau
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=100, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=100//5, verbose=True)
+    # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, 
+    #                         max_lr=1e-2, 
+    #                         steps_per_epoch=len(train_loader), 
+    #                         epochs=args.epochs
+    #                     )
     
     for e in range(epoch):
         
@@ -197,6 +206,8 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             loss.backward()
             optimizer.step()
             
+            # scheduler.step() # For OneCycleLR
+
             nlls.append(loss.item())
             correct += (predicted == target).sum().item()
             total += target.size(0)
@@ -205,6 +216,7 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
         
         acc_test, nll_test = test_DNN(model, test_loader)
         
+        # For ReduceOnPlateau
         scheduler.step(nll_test)
         
         print(colored(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}", 'yellow'))
@@ -241,6 +253,7 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             elif e == epoch - 1:
                 print(colored(f"Early stopping at epoch since the accuracy does not recovered", 'light_cyan'))
                 return
+            
     torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
     
 def test_DNN(model, test_loader):
@@ -290,7 +303,7 @@ def get_model(args, distill=False):
             model = SimpleCNN()
 
         elif args.model == 'lenet':
-            model = LeNet5()
+            model = LeNet5_dnn()
             
         elif args.model == 'vgg7':
             model = VGG7()
@@ -316,6 +329,9 @@ def get_model(args, distill=False):
             
         elif args.model == 'densenet30':
             model = densenet_bc_30_uni()
+            
+        elif args.model == 'lenet':
+            model = LeNet5_uni()
             
         elif args.model == 'mobilenetv2':
             model = MobileNetV2_uni(num_classes=10, width_mult=1.0)
