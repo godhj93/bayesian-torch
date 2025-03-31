@@ -574,13 +574,13 @@ def get_dataset(args, logger):
             transforms.Normalize((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)),
         ])
         
-        transoform_test = transforms.Compose([
+        transform_test = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)),
         ])
         
         train_dataset = datasets.SVHN(root='./data/', split='train', transform=transform_train, download=True)
-        test_dataset = datasets.SVHN(root='./data/', split='test', transform=transoform_test, download=True)
+        test_dataset = datasets.SVHN(root='./data/', split='test', transform=transform_test, download=True)
         
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
