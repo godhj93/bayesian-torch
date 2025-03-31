@@ -550,7 +550,7 @@ def get_dataset(args, logger):
 
         ])
         
-        transoform_test = transforms.Compose([
+        transform_test = transforms.Compose([
             transforms.Resize(img_size),
             transforms.ToTensor(),
             transforms.Normalize((0.4802, 0.4481, 0.3975), (0.2302, 0.2265, 0.2262)),
@@ -558,7 +558,7 @@ def get_dataset(args, logger):
         ])
         
         train_dataset = ImageFolder(root='data/tiny-imagenet-200/train/', transform = transform_train)
-        test_dataset = ImageFolder(root='data/tiny-imagenet-200/val/', transform = transoform_test)
+        test_dataset = ImageFolder(root='data/tiny-imagenet-200/val/', transform = transform_test)
         
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
