@@ -527,6 +527,7 @@ def get_dataset(args, logger):
         ])
         
         transform_test = transforms.Compose([
+            transforms.Resize(img_size),
             transforms.ToTensor(),
             transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
         ])
