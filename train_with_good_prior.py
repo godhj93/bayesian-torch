@@ -102,7 +102,7 @@ def main(args):
         model = bnn.cuda(),
         train_loader = train_loader,
         test_loader = test_loader,
-        optimizer = optim.Adam(bnn.parameters(), lr=1e-3),
+        optimizer = optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov),
         writer = writer,
         mc_runs = args.mc_runs,
         bs = args.bs,
@@ -134,6 +134,7 @@ if __name__ == '__main__':
     parser.add_argument('--optimizer', type=str, default='sgd', help='Optimizer to use [sgd]')
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
+    parser.add_argument('--nesterov', action='store_true', help='Use Nesterov')
     
     args = parser.parse_args()
     

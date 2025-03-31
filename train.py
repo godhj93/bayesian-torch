@@ -123,7 +123,7 @@ def main(args):
     train_loader, test_loader = get_dataset(args = args, logger = logger)
     
     # Optimizer
-    optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
     
     # Save the training arguments
     with open(f"{log_path}/config.txt", "w") as f:
@@ -206,6 +206,7 @@ if __name__ == '__main__':
     parser.add_argument('--optimizer', type=str, default='sgd', help='Optimizer to use [sgd]')
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
+    parser.add_argument('--nesterov', action='store_true', help='Use Nesterov')
     args = parser.parse_args()
     
     print(colored(args, 'blue'))
