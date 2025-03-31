@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import os 
 from termcolor import colored
 from bayesian_torch.models.dnn_to_bnn import get_kl_loss
+from torch.optim.lr_scheduler import _LRScheduler
 
 # Models
 # from models import SimpleCNN, SimpleCNN_uni, SimpleCNN_multi, LeNet5, LeNet5_uni, LeNet5_multi, VGG7, VGG7_uni, VGG7_multi, resnet20_multi, densenet_bc_30
@@ -16,6 +17,7 @@ from utils.models.vgg_dnn import VGG7
 from utils.models.vgg_uni import VGG7_uni
 from utils.models.lenet_dnn import LeNet5_dnn
 from utils.models.lenet_uni import LeNet5_uni
+from utils.models.resnet18_dnn import ResNet18_dnn
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
@@ -38,7 +40,6 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     best_loss = torch.inf
     best_nll = torch.inf
     best_acc = 0
-    
     
     for e in range(epoch):
         if args.train_sampler:
@@ -192,12 +193,17 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
     
     # ReduceOnPlateau
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=100//5, verbose=True)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4, nesterov=True)
+    # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 120, 160], gamma=0.2)
+    # warmup_scheduler = WarmUpLR(optimizer = optimizer, total_iters = len(train_loader) * 1)
     
     for e in range(epoch):
         
         pbar = tqdm(enumerate(train_loader), total=len(train_loader), ncols=0)
 
+        # if e != 0 :
+            # scheduler.step()
+            
         for batch_idx, (data, target) in pbar:
             
             data, target = data.to(device), target.to(device)
@@ -213,12 +219,11 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             total += target.size(0)
             acc_train = correct / total
             pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc_train:.3f}, NLL: {np.mean(nlls):.3f}, LR: {optimizer.param_groups[0]['lr']:.5f}", 'blue'))
-        
+
+            # if e == 0:
+                # warmup_scheduler.step()
+                
         acc_test, nll_test = test_DNN(model, test_loader)
-        
-        # For ReduceOnPlateau
-        scheduler.step(nll_test)
-        
         print(colored(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}", 'yellow'))
         
         if args.prune:
@@ -325,6 +330,9 @@ def get_model(args, distill=False):
         elif args.model == 'resnet20':
             model = resnet20_deterministic()
             
+        elif args.model == 'resnet18':
+            model = ResNet18_dnn()
+            
         elif args.model == 'densenet30':
             model = densenet_bc_30()
             
@@ -415,7 +423,7 @@ def get_model(args, distill=False):
         model.conv1 = Conv2dReparameterization(1, 16, 3, 1, 1) if args.type == 'uni' else Conv2dReparameterization_Multivariate(1, 16, 3, 1, 1)
         print(colored(f"{args.type} Conv1 input channel is changed to 1", 'red'))
     
-    elif args.data =='cifar':
+    elif args.data =='cifar10':
         if args.model == 'lenet':
             if args.type == 'multi':
                 model.conv1 = Conv2dReparameterization_Multivariate(3, 6, 5, 1, 0)
@@ -445,9 +453,40 @@ def get_model(args, distill=False):
         else:
             print(colored(f"{args.model} will be used.", 'red'))
         print(colored(f"{args.type} Conv1 input channel is changed to 3", 'red'))
+    
+    elif args.data == 'cifar100':
         
-    else:
+        if args.model == 'mobilenetv2':
+            if args.type == 'dnn':
+                model.classifier = torch.nn.Linear(1280, 100)
+                print(model)
+                
+            elif args.type =='uni':
+                raise NotImplementedError("Not implemented yet")
+        
+        elif args.model == 'resnet18':
+            if args.type =='dnn':
+                model.fc = torch.nn.Linear(512, 100)
+        else:
+            
+            raise NotImplementedError("Not implemented yet")
+                
+    elif args.data == 'tinyimagenet':
+        
+        if args.model == 'mobilenetv2':
+            if args.type == 'dnn':
+                model.classifier = torch.nn.Linear(1280, 200)
+        
+        elif args.model == 'resnet18':
+            if args.type == 'dnn':
+                model.fc = torch.nn.Linear(512, 200)
+    
+    elif args.data == 'svhn':
         pass
+
+    else:
+        raise NotImplementedError("Not implemented yet")
+    
     return model
 
 def get_dataset(args):
@@ -474,13 +513,12 @@ def get_dataset(args):
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
     
-    elif args.data == 'cifar':
+    elif args.data == 'cifar10':
         print(colored(f"CIFAR-10 dataset is loaded", 'green'))
         # Simple data augmentation
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
-            # transforms.RandomVerticalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         ])
@@ -495,28 +533,70 @@ def get_dataset(args):
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
     
-    elif args.data == 'tinyimagenet':
-        print(colored(f"Tiny ImageNet dataset is loaded", 'red'))
+    elif args.data == 'cifar100':
+        img_size = 32
+        print(colored(f"CIFAR-100 dataset is loaded, Size: {img_size}x{img_size}", 'green'))
         transform_train = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
+            transforms.RandomCrop(img_size, padding=4),
             transforms.RandomHorizontalFlip(),
-            transforms.RandomVerticalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ])
+        transform_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+        ])
+        
+        train_dataset = datasets.CIFAR100(root='./data/', train=True, transform=transform_train, download=True)
+        test_dataset = datasets.CIFAR100(root='./data/', train=False, transform=transform_test)
+        
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
+        
+        
+    elif args.data == 'tinyimagenet':
+        img_size = 224
+        print(colored(f"Tiny ImageNet dataset is loaded, Size: {img_size}x{img_size}", 'green'))
+        transform_train = transforms.Compose([
+            transforms.RandomResizedCrop(img_size),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(15),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
 
         ])
         
         transoform_test = transforms.Compose([
+            transforms.Resize(img_size),
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 
         ])
-        train_dataset = ImageFolder(root='./tiny-imagenet-200/train/', transform = transform_train)
-        test_dataset = ImageFolder(root='./tiny-imagenet-200/val/', transform = transoform_test)
+        train_dataset = ImageFolder(root='data/tiny-imagenet-200/train/', transform = transform_train)
+        test_dataset = ImageFolder(root='data/tiny-imagenet-200/val/', transform = transoform_test)
         
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
          
+    elif args.data == 'svhn':
+        print(colored(f"SVHN dataset is loaded", 'red'))
+        transform_train = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)),
+        ])
+        
+        transoform_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)),
+        ])
+        train_dataset = datasets.SVHN(root='./data/', split='train', transform=transform_train, download=True)
+        test_dataset = datasets.SVHN(root='./data/', split='test', transform=transoform_test, download=True)
+        
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
+        
     else:
         raise ValueError('Dataset not found')
     
@@ -539,4 +619,19 @@ def get_dataset(args):
 
     return train_loader, test_loader
     
-    
+class WarmUpLR(_LRScheduler):
+    """warmup_training learning rate scheduler
+    Args:
+        optimizer: optimzier(e.g. SGD)
+        total_iters: totoal_iters of warmup phase
+    """
+    def __init__(self, optimizer, total_iters, last_epoch=-1):
+
+        self.total_iters = total_iters
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        """we will use the first m batches, and set the learning
+        rate to base_lr * m / total_iters
+        """
+        return [base_lr * self.last_epoch / (self.total_iters + 1e-8) for base_lr in self.base_lrs]
