@@ -145,7 +145,8 @@ def main(args):
         model = Multivariate_MOPED(dnn = dnn_model, bnn = model, device = device)
    
     # Optimizer
-    optim = torch.optim.Adam(model.parameters(), lr=args.lr)
+    # optim = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
     # Learning rate scheduler
     # args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[args.epochs], gamma=1.0) # Never decay the learning rate
