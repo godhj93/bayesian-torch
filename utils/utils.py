@@ -240,7 +240,8 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             if nll_test <= best_loss:
                 best_loss = nll_test
             
-            if best_acc >= args.best_acc and acc_test >= best_acc: 
+            # if best_acc >= args.best_acc and acc_test >= best_acc: 
+            if best_loss <= args.best_nll and nll_test <= best_loss:
                 
                 logger.info(f"Early stopping at epoch {e+1}")
                 best_model_weight = model.state_dict()
@@ -486,7 +487,7 @@ def get_dataset(args, logger):
             transforms.Normalize((0.1307,), (0.3081,))
         ])
         
-        train_dataset = datasets.MNIST(root='./data/', train=True, transform=trasform_train, download=True)
+        train_dataset = datasets.MNIST(root='./data/', train=True, transform=transform_train, download=True)
         test_dataset = datasets.MNIST(root='./data/', train=False, transform=transform_test)
         
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
