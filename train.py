@@ -86,10 +86,6 @@ def main(args):
     console_handler.setLevel(logging.INFO)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    
-        
-    # 현재 날짜와 시간을 포맷팅
     date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
     # log_path를 위한 파라미터들을 dict로 구성
@@ -201,7 +197,6 @@ if __name__ == '__main__':
     parser.add_argument('--t', type=float, default=1.0, help='Cold Posterior temperature')
     parser.add_argument('--data', type=str, help='Dataset to use [cifar10, cifar100, svhn, tinyimagenet]')
     parser.add_argument('--train_sampler', type=bool, default=False, help='Do not use this argument')
-    parser.add_argument('--distill', action='store_true', help='Use distillation')
     parser.add_argument('--weight', type=str, help='DNN weight path for ')
     parser.add_argument('--moped', action='store_true', help='Use MOPED')
     parser.add_argument('--alpha', type=float, default= 0.0, help = 'Distill Coefficient')
