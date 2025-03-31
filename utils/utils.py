@@ -5,10 +5,8 @@ import torch.nn.functional as F
 import os 
 from termcolor import colored
 from bayesian_torch.models.dnn_to_bnn import get_kl_loss
-from torch.optim.lr_scheduler import _LRScheduler
-
-# Models
-# from models import SimpleCNN, SimpleCNN_uni, SimpleCNN_multi, LeNet5, LeNet5_uni, LeNet5_multi, VGG7, VGG7_uni, VGG7_multi, resnet20_multi, densenet_bc_30
+import copy
+# MODEL
 from utils.models.resnet_multi import resnet20_multi
 from utils.models.densenet_dnn import densenet_bc_30
 from utils.models.densenet_uni import densenet_bc_30_uni
@@ -34,7 +32,7 @@ from torchvision.datasets import ImageFolder
 
 import torch.nn.utils.prune as prune
 
-def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs, bs, device):
+def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, mc_runs, bs, device, logger):
 
     model.to(device)
     best_loss = torch.inf
@@ -93,7 +91,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
 
         acc_test, nll, kl = test_BNN(model = model, test_loader = test_loader, bs = bs, mc_runs = mc_runs, device = device, args = args)
-        print(colored(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}", 'yellow'))
+        logger.info(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}")
         
         # args.scheduler.step()
         # print(colored(f"Learning rate: {optimizer.param_groups[0]['lr']}", 'red'))
@@ -118,21 +116,20 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             # else:
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_model.pth'))    
             
-            print(colored(f"Best model saved at epoch {e}", 'green'))
+            logger.info(f"Best model saved at epoch {e}")
             
         if best_nll > nll:
             best_nll = nll
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_nll_model.pth'))
-            print(colored(f"Best NLL model saved at epoch {e}", 'green'))
+            logger.info(f"Best NLL model saved at epoch {e}")
             
         if best_acc < acc_test:
             best_acc = acc_test
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_acc_model.pth'))
-            print(colored(f"Best ACC model saved at epoch {e}", 'green'))
+            logger.info(f"Best ACC model saved at epoch {e}")
             
     torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
-    print(colored(f"Last model saved", 'green'))
-
+    logger.info(f"Last model saved")
 
 def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
     
@@ -145,10 +142,9 @@ def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
     kl_total = []
     
     mc_runs = 30
-    print(colored(f"MC runs: {mc_runs}", 'red'))
     with torch.no_grad():
         
-        for data, target in tqdm(test_loader, desc='Testing'):
+        for data, target in tqdm(test_loader, desc=f'Testing [MC_runs={mc_runs}]'):
             data, target = data.to(device), target.to(device)
             
             outputs = []
@@ -179,7 +175,7 @@ def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
             
     return correct / total, np.mean(nll_total), np.mean(kl_total)
 
-def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer, args):
+def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer, args, logger):
     
     model.to(device)    
     model.train()
@@ -191,19 +187,12 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
     best_acc = 0
     best_model_found = False
     
-    # ReduceOnPlateau
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    # optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4, nesterov=True)
-    # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 120, 160], gamma=0.2)
-    # warmup_scheduler = WarmUpLR(optimizer = optimizer, total_iters = len(train_loader) * 1)
+    early_stopping = EarlyStopping(patience=100, min_delta=0.0)
     
     for e in range(epoch):
         
         pbar = tqdm(enumerate(train_loader), total=len(train_loader), ncols=0)
 
-        # if e != 0 :
-            # scheduler.step()
-            
         for batch_idx, (data, target) in pbar:
             
             data, target = data.to(device), target.to(device)
@@ -220,11 +209,8 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             acc_train = correct / total
             pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc_train:.3f}, NLL: {np.mean(nlls):.3f}, LR: {optimizer.param_groups[0]['lr']:.5f}", 'blue'))
 
-            # if e == 0:
-                # warmup_scheduler.step()
-                
         acc_test, nll_test = test_DNN(model, test_loader)
-        print(colored(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}", 'yellow'))
+        logger.info(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}")
         
         if args.prune:
             writer.add_scalar('Train/accuracy', acc_train, e + 1 + args.total_epoch)
@@ -241,12 +227,12 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
         if best_loss > nll_test:
             best_loss = nll_test
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_model.pth'))
-            print(colored(f"Best model saved at epoch {e+1}", 'green'))
+            logger.info(f"Best model saved at epoch {e+1}")
         
         if args.prune:
 
-            print(colored(f"Original best NLL: {args.best_nll:.4f}, Current NLL: {nll_test:.4f}", 'magenta'))
-            print(colored(f"Original best ACC: {args.best_acc:.4f}, Current ACC: {acc_test:.4f}", 'magenta'))
+            logger.info(f"Original best NLL: {args.best_nll:.4f}, Current NLL: {nll_test:.4f}")
+            logger.info(f"Original best ACC: {args.best_acc:.4f}, Current ACC: {acc_test:.4f}")
             
             if best_acc <= acc_test:
                 best_acc = acc_test
@@ -254,10 +240,9 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             if nll_test <= best_loss:
                 best_loss = nll_test
             
-            # if best_loss <= args.best_nll and nll_test <= best_loss:  #or acc_test >= args.best_acc:
-            if best_acc >= args.best_acc and acc_test >= best_acc:  #or acc_test >= args.best_acc:
+            if best_acc >= args.best_acc and acc_test >= best_acc: 
                 
-                print(colored(f"Early stopping at epoch {e+1}", 'light_cyan'))
+                logger.info(f"Early stopping at epoch {e+1}")
                 best_model_weight = model.state_dict()
                 save_path = os.path.join(writer.log_dir, f'pruned_model_iter_{args.prune_iter}.pth')
                 save_pruned_model(model, save_path)
@@ -265,14 +250,23 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
                 best_model_found = True
                 return False
             elif e == epoch - 1 and not best_model_found:
-                print(colored(f"Stop at epoch since the NLL does not recovered", 'red'))
+                logger.info(f"Stop to fine-tune at {e+1} epoch since the NLL does not recovered")
                 return True
             
+        early_stopping(val_loss=nll_test, model=model)
+            
+        if early_stopping.early_stop:
+            logger.info(f"Early stopping at epoch {e+1}")
+            best_model_weight = early_stopping.best_model_state
+            save_path = os.path.join(writer.log_dir, f'best_model.pth')
+            torch.save(best_model_weight, save_path)
+            return False
+
     torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
-    print(colored(f"Last model saved", 'green'))
+    logger.info(f"Last model saved")
     
-    model.load_state_dict(best_model_weight, strict=False)
-    print(colored(f"Best model returned", 'green'))
+    # model.load_state_dict(best_model_weight, strict=False)
+    # print(colored(f"Best model returned", 'green'))
     
     
 def test_DNN(model, test_loader):
@@ -310,24 +304,15 @@ def save_pruned_model(model, save_path):
     torch.save(model.state_dict(), save_path)
     # print(f"Pruned model saved (masks removed) at: {save_path}")
 
-def get_model(args, distill=False):
+def get_model(args, logger, distill=False):
     
     if distill:
         args.type = 'dnn'
         print(colored(f"Getting DNN model", 'red'))
         
     if args.type == 'dnn':
-        
-        if args.model == 'simple':
-            model = SimpleCNN()
-
-        elif args.model == 'lenet':
-            model = LeNet5_dnn()
             
-        elif args.model == 'vgg7':
-            model = VGG7()
-            
-        elif args.model == 'resnet20':
+        if args.model == 'resnet20':
             model = resnet20_deterministic()
             
         elif args.model == 'resnet18':
@@ -339,8 +324,6 @@ def get_model(args, distill=False):
         elif args.model == 'mobilenetv2':
             model = MobileNetV2_dnn(num_classes=10, width_mult=1.0)
             
-        elif args.model == 'vgg7':
-            model = VGG7()
         else:
             raise ValueError('Model not found')
         
@@ -351,57 +334,49 @@ def get_model(args, distill=False):
             
         elif args.model == 'densenet30':
             model = densenet_bc_30_uni()
-            
-        elif args.model == 'lenet':
-            model = LeNet5_uni()
-            
-        elif args.model == 'mobilenetv2':
-            model = MobileNetV2_uni(num_classes=10, width_mult=1.0)
-            
-        elif args.model == 'vgg7':
-            model = VGG7_uni()
+
         else:
             raise ValueError('Model not found')
         
-    elif args.type == 'multi':
+    # elif args.type == 'multi':
             
-        if args.model == 'resnet20':
-            model = resnet20_multi()
+    #     if args.model == 'resnet20':
+    #         model = resnet20_multi()
             
-        elif args.model == 'densenet30':
-            NotImplementedError("Not implemented yet")
+    #     elif args.model == 'densenet30':
+    #         NotImplementedError("Not implemented yet")
             
-        elif args.model == 'mobilenetv2':
-            NotImplementedError("Not implemented yet")
+    #     elif args.model == 'mobilenetv2':
+    #         NotImplementedError("Not implemented yet")
             
-        else:
-            raise ValueError('Model not found')
+    #     else:
+    #         raise ValueError('Model not found')
     
-    if args.moped:
-        const_bnn_prior_parameters = {
-        "prior_mu": 0.0,
-        "prior_sigma": 1.0,
-        "posterior_mu_init": 0.0,
-        "posterior_rho_init": -3.0,
-        "type": "Reparameterization",  # Flipout or Reparameterization
-        "moped_enable": True,  # initialize mu/sigma from the dnn weights
-        "moped_delta": 0.2,
-        }
+    # if args.moped:
+    #     const_bnn_prior_parameters = {
+    #     "prior_mu": 0.0,
+    #     "prior_sigma": 1.0,
+    #     "posterior_mu_init": 0.0,
+    #     "posterior_rho_init": -3.0,
+    #     "type": "Reparameterization",  # Flipout or Reparameterization
+    #     "moped_enable": True,  # initialize mu/sigma from the dnn weights
+    #     "moped_delta": 0.2,
+    #     }
         
-        model.load_state_dict(torch.load(args.weight))
-        dnn_to_bnn(model, const_bnn_prior_parameters)
+    #     model.load_state_dict(torch.load(args.weight))
+    #     dnn_to_bnn(model, const_bnn_prior_parameters)
         
-        args.type = 'uni'
+    #     args.type = 'uni'
         
-    elif args.multi_moped:
+    # elif args.multi_moped:
         
-        args.type = 'multi'
+    #     args.type = 'multi'
     
     # if args.distill or args.martern:
     #     args.type = 'multi'
         
     # Check the number of parameters
-    print(f"Total number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+    logger.info(f"Total number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
     
     if torch.cuda.device_count() > 1 and args.multi_gpu:      
         device = 'cuda'  
@@ -415,13 +390,13 @@ def get_model(args, distill=False):
         
         # 모델을 DDP로 래핑
         model = DDP(model.to(device), device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False)
-        print(colored(f"Model is wrapped by DDP", 'red'))
+        logger.info(colored(f"Model is wrapped by DDP", 'red'))
     
    
         
     if args.data == 'mnist' and args.model == 'resnet20':
         model.conv1 = Conv2dReparameterization(1, 16, 3, 1, 1) if args.type == 'uni' else Conv2dReparameterization_Multivariate(1, 16, 3, 1, 1)
-        print(colored(f"{args.type} Conv1 input channel is changed to 1", 'red'))
+        logger.info(colored(f"{args.type} Conv1 input channel is changed to 1", 'red'))
     
     elif args.data =='cifar10':
         if args.model == 'lenet':
@@ -451,22 +426,24 @@ def get_model(args, distill=False):
             else:
                 raise NotImplementedError("Not implemented yet")
         else:
-            print(colored(f"{args.model} will be used.", 'red'))
-        print(colored(f"{args.type} Conv1 input channel is changed to 3", 'red'))
+            logger.info(colored(f"{args.model} will be used.", 'red'))
+        logger.info(colored(f"{args.type} Conv1 input channel is changed to 3", 'red'))
     
     elif args.data == 'cifar100':
         
         if args.model == 'mobilenetv2':
+            
             if args.type == 'dnn':
                 model.classifier = torch.nn.Linear(1280, 100)
-                print(model)
                 
             elif args.type =='uni':
                 raise NotImplementedError("Not implemented yet")
         
         elif args.model == 'resnet18':
+            
             if args.type =='dnn':
                 model.fc = torch.nn.Linear(512, 100)
+                
         else:
             
             raise NotImplementedError("Not implemented yet")
@@ -474,10 +451,12 @@ def get_model(args, distill=False):
     elif args.data == 'tinyimagenet':
         
         if args.model == 'mobilenetv2':
+            
             if args.type == 'dnn':
                 model.classifier = torch.nn.Linear(1280, 200)
         
         elif args.model == 'resnet18':
+            
             if args.type == 'dnn':
                 model.fc = torch.nn.Linear(512, 200)
     
@@ -489,20 +468,20 @@ def get_model(args, distill=False):
     
     return model
 
-def get_dataset(args):
+def get_dataset(args, logger):
     
     if args.data == 'mnist':
         
-        # Simple data augmentation 
-        trasform_train = transforms.Compose([
+        logger.info(colored(f"MNIST dataset is loaded", 'green'))
+
+        transform_train = transforms.Compose([
             transforms.RandomCrop(28, padding=4),
             transforms.RandomHorizontalFlip(),
-            transforms.RandomVerticalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,))
         ])
+        
         transform_test = transforms.Compose([
-            # transforms.Resize((32, 32)),
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,))
         ])
@@ -512,39 +491,44 @@ def get_dataset(args):
         
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
-    
+        
     elif args.data == 'cifar10':
-        print(colored(f"CIFAR-10 dataset is loaded", 'green'))
-        # Simple data augmentation
+        
+        logger.info(colored(f"CIFAR-10 dataset is loaded", 'green'))
+        
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         ])
-        transoform_test = transforms.Compose([
+        
+        transform_test = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         ])
-        # CIFAR dataset
+        
         train_dataset = datasets.CIFAR10(root='./data/', train=True, transform=transform_train, download=True)
-        test_dataset = datasets.CIFAR10(root='./data/', train=False, transform=transoform_test)
+        test_dataset = datasets.CIFAR10(root='./data/', train=False, transform=transform_test)
         
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
     
     elif args.data == 'cifar100':
-        img_size = 32
-        print(colored(f"CIFAR-100 dataset is loaded, Size: {img_size}x{img_size}", 'green'))
+        
+        img_size = 224
+        logger.info(colored(f"CIFAR-100 dataset is loaded, Size: {img_size}x{img_size}", 'green'))
+        
         transform_train = transforms.Compose([
-            transforms.RandomCrop(img_size, padding=4),
+            transforms.RandomResizedCrop(img_size),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
         ])
+        
         transform_test = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+            transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
         ])
         
         train_dataset = datasets.CIFAR100(root='./data/', train=True, transform=transform_train, download=True)
@@ -553,25 +537,26 @@ def get_dataset(args):
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
         
-        
     elif args.data == 'tinyimagenet':
+        
         img_size = 224
-        print(colored(f"Tiny ImageNet dataset is loaded, Size: {img_size}x{img_size}", 'green'))
+        logger.info(colored(f"Tiny ImageNet dataset is loaded, Size: {img_size}x{img_size}", 'green'))
+        
         transform_train = transforms.Compose([
             transforms.RandomResizedCrop(img_size),
             transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+            transforms.Normalize((0.4802, 0.4481, 0.3975), (0.2302, 0.2265, 0.2262))
 
         ])
         
         transoform_test = transforms.Compose([
             transforms.Resize(img_size),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+            transforms.Normalize((0.4802, 0.4481, 0.3975), (0.2302, 0.2265, 0.2262)),
 
         ])
+        
         train_dataset = ImageFolder(root='data/tiny-imagenet-200/train/', transform = transform_train)
         test_dataset = ImageFolder(root='data/tiny-imagenet-200/val/', transform = transoform_test)
         
@@ -579,7 +564,9 @@ def get_dataset(args):
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
          
     elif args.data == 'svhn':
-        print(colored(f"SVHN dataset is loaded", 'red'))
+        
+        logger.info(colored(f"SVHN dataset is loaded", 'green'))
+        
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
@@ -591,6 +578,7 @@ def get_dataset(args):
             transforms.ToTensor(),
             transforms.Normalize((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)),
         ])
+        
         train_dataset = datasets.SVHN(root='./data/', split='train', transform=transform_train, download=True)
         test_dataset = datasets.SVHN(root='./data/', split='test', transform=transoform_test, download=True)
         
@@ -600,6 +588,12 @@ def get_dataset(args):
     else:
         raise ValueError('Dataset not found')
     
+    logger.info(colored(f"Train Transforms:"))
+    logger.info(colored(f"{transform_train}", 'green'))
+    
+    logger.info(colored(f"Test Transforms:"))
+    logger.info(colored(f"{transform_test}", 'green'))
+        
     if torch.cuda.device_count() > 1 and args.multi_gpu:
         
         # DDP 초기화
@@ -619,19 +613,37 @@ def get_dataset(args):
 
     return train_loader, test_loader
     
-class WarmUpLR(_LRScheduler):
-    """warmup_training learning rate scheduler
-    Args:
-        optimizer: optimzier(e.g. SGD)
-        total_iters: totoal_iters of warmup phase
+class EarlyStopping:
+    
     """
-    def __init__(self, optimizer, total_iters, last_epoch=-1):
-
-        self.total_iters = total_iters
-        super().__init__(optimizer, last_epoch)
-
-    def get_lr(self):
-        """we will use the first m batches, and set the learning
-        rate to base_lr * m / total_iters
+    Validation Loss가 개선되지 않으면 일정 patience 만큼 기다렸다가 학습을 조기 종료합니다.
+    """
+    def __init__(self, patience=5, min_delta=0.0):
         """
-        return [base_lr * self.last_epoch / (self.total_iters + 1e-8) for base_lr in self.base_lrs]
+        Args:
+            patience (int): 성능이 개선되지 않는 Epoch가 patience를 초과하면 학습 중단
+            min_delta (float): Loss가 이전 최저값 대비 어느 정도(=min_delta) 이하로 내려가야 '개선'으로 판단
+        """
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_loss = float('inf')
+        self.early_stop = False
+        self.best_model_state = None  # 최적 모델 가중치 저장
+
+    def __call__(self, val_loss, model):
+        """
+        val_loss (float): 현재 Epoch에서 측정한 Validation Loss
+        model (nn.Module): 학습 중인 모델 객체
+        """
+        if val_loss < self.best_loss - self.min_delta:
+            # 성능이 개선된 경우
+            self.best_loss = val_loss
+            self.counter = 0
+            # 모델의 가중치(파라미터) 복사해 저장
+            self.best_model_state = copy.deepcopy(model.state_dict())
+        else:
+            # 성능 개선 없음
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True

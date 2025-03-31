@@ -8,6 +8,7 @@ from termcolor import colored
 import torch.nn.utils.prune as prune
 import torch.nn as nn
 import os 
+import logging
 
 # def prune_model(model, sparsity):
 #     """
@@ -37,7 +38,7 @@ import os
 #     print(colored(f"Total sparsity: {total_sparsity:.2%}", 'yellow'))
 
 
-def prune_model(model, sparsity):
+def prune_model(model, sparsity, logger):
     """
     모델 전체의 Conv2d 및 Linear 레이어에 대해 global unstructured pruning을 적용합니다.
     Args:
@@ -74,15 +75,19 @@ def prune_model(model, sparsity):
     total_params = sum(module.weight.numel() for module in model.modules() if isinstance(module, (nn.Conv2d, nn.Linear)))
     remaining_params = sum(module.weight_mask.sum().item() for module in model.modules() if hasattr(module, 'weight_mask'))
     total_sparsity = 1 - (remaining_params / total_params)
-    print(colored(f"Total sparsity: {total_sparsity:.2%}", 'yellow'))
+    logger.info(colored(f"Total sparsity: {total_sparsity:.2%}", 'yellow'))
     
 def main(args):
+    
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    model = get_model(args)
     
-    train_loader, test_loader = get_dataset(args)
         
     # 현재 날짜와 시간을 포맷팅
     date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -96,13 +101,8 @@ def main(args):
         'bs': args.bs,
         'lr': args.lr,
         'mc_runs': args.mc_runs,
-        'temp': args.t,
         'epochs': args.epochs,
-        'kd': args.distill,
-        'martern': args.martern,
-        'alpha': args.alpha,
         'moped': args.moped,
-        'multi_moped': args.multi_moped,
         'timestamp': date
     }
 
@@ -113,54 +113,37 @@ def main(args):
     
     writer = SummaryWriter(log_path)
     
-    # Save the arguments
+    file_handler = logging.FileHandler(log_path + '/log.txt')
+    file_handler.setLevel(logging.INFO)
+    
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
+    
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+    
+    model = get_model(args = args, logger = logger)
+    train_loader, test_loader = get_dataset(args = args, logger = logger)
+    
+    # Optimizer
+    optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    
+    # Save the training arguments
     with open(f"{log_path}/config.txt", "w") as f:
         for key, value in vars(args).items():
             f.write(f"{key}: {value}\n")
-                                
-    # assert args.distill or args.martern or args.moped or args.multi_moped, "Please specify the unique method"
-    if args.distill:
-        print("Distillation is used")
-        dnn_model = get_model(args, distill=True)
-        dnn_model.load_state_dict(torch.load(args.weight))
-        print(colored(f"Distilling from {args.weight}", 'green'))
-        print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
-        model = distill(dnn_model, model, data_loader = train_loader, args = args, alpha= args.alpha, device = device, writer = writer)
-        args.type = 'multi'
-        
-    elif args.martern:
-        print("Martern Prior is used")
-        dnn_model = get_model(args, distill=True)
-        dnn_model.load_state_dict(torch.load(args.weight))
-        print(colored(f"Weight is loaded from {args.weight}", 'green'))
-        print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
-        model = set_martern_prior(dnn_model, model, device = device)
-        
-    elif args.multi_moped:
-        print("Multi-MOPED is used")
-        dnn_model = get_model(args, distill=True)
-        dnn_model.load_state_dict(torch.load(args.weight))
-        print(colored(f"Pretrained weight is loaded from {args.weight}", 'green'))
-        print(colored(f"Test accuracy of DNN: {test_DNN(dnn_model, test_loader)}", 'green'))
-        model = Multivariate_MOPED(dnn = dnn_model, bnn = model, device = device)
-   
-    # Optimizer
-    # optim = torch.optim.Adam(model.parameters(), lr=args.lr)
-    optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
-
-    # Learning rate scheduler
-    # args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[args.epochs], gamma=1.0) # Never decay the learning rate
     
     if args.type == 'dnn':
 
         if args.prune:
             model.load_state_dict(torch.load(args.weight))
             args.best_acc, args.best_nll = test_DNN(model, test_loader)
-            print(colored(f"Test accuracy of DNN: {args.best_acc:.4f}, Test NLL: {args.best_nll:.4f}", 'green'))
+            logger.info(colored(f"Test accuracy of DNN: {args.best_acc:.4f}, Test NLL: {args.best_nll:.4f}", 'green'))
             
             save_path = os.path.join(writer.log_dir, f'original_model.pth')
             torch.save(model.state_dict(), save_path)
-            print(colored(f"Original model is saved at {save_path}", 'green'))
+            logger.info(colored(f"Original model is saved at {save_path}", 'green'))
             
             args.total_epoch = 0
             for i in range(1, 100):
@@ -168,7 +151,7 @@ def main(args):
                 args.prune_iter = i
 
                 # Pruning step
-                prune_model(model, sparsity=i/100.0)
+                prune_model(model, sparsity=i/100.0, logger=logger)
                 
                 # Training
                 if train_DNN(epoch=args.epochs, 
@@ -178,8 +161,8 @@ def main(args):
                         optimizer=optim, 
                         writer=writer,
                         device=device,
-                        args=args): break
-                
+                        args=args,
+                        logger=logger): break
                 
         else:
             train_DNN(epoch=args.epochs, 
@@ -189,7 +172,8 @@ def main(args):
                     optimizer=optim, 
                     writer=writer,
                     device=device,
-                    args=args)
+                    args=args,
+                    logger=logger)
 
     else:
         train_BNN(epoch=args.epochs, 
@@ -201,7 +185,8 @@ def main(args):
                   bs=args.bs, 
                   writer=writer,
                   device=device,
-                  args=args)
+                  args=args,
+                  logger=logger)
 
 if __name__ == '__main__':
     
@@ -210,20 +195,26 @@ if __name__ == '__main__':
     parser.add_argument('--mc_runs', type=int, default=30, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--bs', type=int, default=128, help='Batch size')
-    parser.add_argument('--model', type=str, default='resnet20', help='Model to train [simple, lenet, vgg7, resnet20]')
+    parser.add_argument('--model', type=str, help='Model to train [resnet18, resnet20, densenet30, densenet121, mobilenetv2]')
     parser.add_argument('--type', type=str, default='dnn', help='Type of model [dnn, uni, multi]')
     parser.add_argument('--multi-gpu', action='store_true', help='Use multi-GPU')
     parser.add_argument('--t', type=float, default=1.0, help='Cold Posterior temperature')
-    parser.add_argument('--data', type=str, default='cifar', help='Dataset to use [mnist, cifar]')
+    parser.add_argument('--data', type=str, help='Dataset to use [cifar10, cifar100, svhn, tinyimagenet]')
     parser.add_argument('--train_sampler', type=bool, default=False, help='Do not use this argument')
     parser.add_argument('--distill', action='store_true', help='Use distillation')
-    parser.add_argument('--weight', type=str, help='DNN weight path for distillation')
+    parser.add_argument('--weight', type=str, help='DNN weight path for ')
     parser.add_argument('--moped', action='store_true', help='Use MOPED')
     parser.add_argument('--alpha', type=float, default= 0.0, help = 'Distill Coefficient')
     parser.add_argument('--martern', action='store_true', help='Use Martern Prior')
     parser.add_argument('--multi_moped', action='store_true', help='Use Multi-MOPED')
     parser.add_argument('--prune', action='store_true', help='Use pruning')
+    parser.add_argument('--optimizer', type=str, default='sgd', help='Optimizer to use [sgd]')
+    parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
+    parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
     args = parser.parse_args()
     
     print(colored(args, 'blue'))
+    
+    
+    
     main(args)
