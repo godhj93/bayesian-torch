@@ -443,7 +443,7 @@ def get_model(args, logger, distill=False):
         elif args.model == 'resnet18':
             
             if args.type =='dnn':
-                model.fc = torch.nn.Linear(512, 100)
+                model.base_model.fc = torch.nn.Linear(512, 100)
                 
         else:
             
@@ -459,7 +459,7 @@ def get_model(args, logger, distill=False):
         elif args.model == 'resnet18':
             
             if args.type == 'dnn':
-                model.fc = torch.nn.Linear(512, 200)
+                model.base_model.fc = torch.nn.Linear(512, 200)
     
     elif args.data == 'svhn':
         pass
