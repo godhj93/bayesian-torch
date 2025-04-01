@@ -48,7 +48,7 @@ def main(args):
         'lr': args.lr,
         'mc_runs': args.mc_runs,
         'epochs': args.epochs,
-        'moped': args.moped,
+        'moped': args.MOPED,
         'timestamp': date,
         'sparsity': sparsity,
         
