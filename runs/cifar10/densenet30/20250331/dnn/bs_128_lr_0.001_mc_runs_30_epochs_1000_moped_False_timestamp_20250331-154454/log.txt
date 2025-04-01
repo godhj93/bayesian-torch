@@ -1,0 +1,351 @@
+2025-03-31 15:44:54,143 - root - INFO - Total number of parameters: 166,698
+2025-03-31 15:44:54,176 - root - INFO - [31mdensenet30 will be used.[0m
+2025-03-31 15:44:54,177 - root - INFO - [31mdnn Conv1 input channel is changed to 3[0m
+2025-03-31 15:44:54,177 - root - INFO - [32mCIFAR-10 dataset is loaded[0m
+2025-03-31 15:44:55,127 - root - INFO - Train Transforms:[0m
+2025-03-31 15:44:55,127 - root - INFO - [32mCompose(
+    RandomCrop(size=(32, 32), padding=4)
+    RandomHorizontalFlip(p=0.5)
+    ToTensor()
+    Normalize(mean=(0.4914, 0.4822, 0.4465), std=(0.2023, 0.1994, 0.201))
+)[0m
+2025-03-31 15:44:55,127 - root - INFO - Test Transforms:[0m
+2025-03-31 15:44:55,127 - root - INFO - [32mCompose(
+    ToTensor()
+    Normalize(mean=(0.4914, 0.4822, 0.4465), std=(0.2023, 0.1994, 0.201))
+)[0m
+2025-03-31 15:45:12,273 - root - INFO - [Test] Acc: 0.224, NLL: 2.111
+2025-03-31 15:45:12,301 - root - INFO - Best model saved at epoch 1
+2025-03-31 15:45:27,881 - root - INFO - [Test] Acc: 0.334, NLL: 1.769
+2025-03-31 15:45:27,905 - root - INFO - Best model saved at epoch 2
+2025-03-31 15:45:43,738 - root - INFO - [Test] Acc: 0.380, NLL: 1.645
+2025-03-31 15:45:43,766 - root - INFO - Best model saved at epoch 3
+2025-03-31 15:45:59,476 - root - INFO - [Test] Acc: 0.426, NLL: 1.573
+2025-03-31 15:45:59,524 - root - INFO - Best model saved at epoch 4
+2025-03-31 15:46:15,455 - root - INFO - [Test] Acc: 0.464, NLL: 1.460
+2025-03-31 15:46:15,504 - root - INFO - Best model saved at epoch 5
+2025-03-31 15:46:32,162 - root - INFO - [Test] Acc: 0.479, NLL: 1.463
+2025-03-31 15:46:49,322 - root - INFO - [Test] Acc: 0.504, NLL: 1.363
+2025-03-31 15:46:49,350 - root - INFO - Best model saved at epoch 7
+2025-03-31 15:47:06,387 - root - INFO - [Test] Acc: 0.532, NLL: 1.283
+2025-03-31 15:47:06,438 - root - INFO - Best model saved at epoch 8
+2025-03-31 15:47:24,789 - root - INFO - [Test] Acc: 0.550, NLL: 1.252
+2025-03-31 15:47:24,838 - root - INFO - Best model saved at epoch 9
+2025-03-31 15:47:43,896 - root - INFO - [Test] Acc: 0.568, NLL: 1.203
+2025-03-31 15:47:43,940 - root - INFO - Best model saved at epoch 10
+2025-03-31 15:48:02,406 - root - INFO - [Test] Acc: 0.581, NLL: 1.162
+2025-03-31 15:48:02,441 - root - INFO - Best model saved at epoch 11
+2025-03-31 15:48:20,293 - root - INFO - [Test] Acc: 0.575, NLL: 1.178
+2025-03-31 15:48:38,329 - root - INFO - [Test] Acc: 0.600, NLL: 1.130
+2025-03-31 15:48:38,369 - root - INFO - Best model saved at epoch 13
+2025-03-31 15:48:56,054 - root - INFO - [Test] Acc: 0.607, NLL: 1.113
+2025-03-31 15:48:56,097 - root - INFO - Best model saved at epoch 14
+2025-03-31 15:49:14,308 - root - INFO - [Test] Acc: 0.609, NLL: 1.127
+2025-03-31 15:49:31,875 - root - INFO - [Test] Acc: 0.613, NLL: 1.088
+2025-03-31 15:49:31,929 - root - INFO - Best model saved at epoch 16
+2025-03-31 15:49:49,964 - root - INFO - [Test] Acc: 0.613, NLL: 1.087
+2025-03-31 15:49:50,016 - root - INFO - Best model saved at epoch 17
+2025-03-31 15:50:07,736 - root - INFO - [Test] Acc: 0.639, NLL: 1.030
+2025-03-31 15:50:07,769 - root - INFO - Best model saved at epoch 18
+2025-03-31 15:50:25,762 - root - INFO - [Test] Acc: 0.644, NLL: 1.017
+2025-03-31 15:50:25,803 - root - INFO - Best model saved at epoch 19
+2025-03-31 15:50:43,814 - root - INFO - [Test] Acc: 0.654, NLL: 0.988
+2025-03-31 15:50:43,845 - root - INFO - Best model saved at epoch 20
+2025-03-31 15:51:01,947 - root - INFO - [Test] Acc: 0.643, NLL: 0.996
+2025-03-31 15:51:19,749 - root - INFO - [Test] Acc: 0.648, NLL: 0.982
+2025-03-31 15:51:19,781 - root - INFO - Best model saved at epoch 22
+2025-03-31 15:51:37,835 - root - INFO - [Test] Acc: 0.669, NLL: 0.928
+2025-03-31 15:51:37,876 - root - INFO - Best model saved at epoch 23
+2025-03-31 15:51:56,380 - root - INFO - [Test] Acc: 0.672, NLL: 0.959
+2025-03-31 15:52:14,359 - root - INFO - [Test] Acc: 0.678, NLL: 0.928
+2025-03-31 15:52:14,396 - root - INFO - Best model saved at epoch 25
+2025-03-31 15:52:32,126 - root - INFO - [Test] Acc: 0.679, NLL: 0.928
+2025-03-31 15:52:49,848 - root - INFO - [Test] Acc: 0.683, NLL: 0.897
+2025-03-31 15:52:49,883 - root - INFO - Best model saved at epoch 27
+2025-03-31 15:53:07,775 - root - INFO - [Test] Acc: 0.697, NLL: 0.877
+2025-03-31 15:53:07,805 - root - INFO - Best model saved at epoch 28
+2025-03-31 15:53:25,658 - root - INFO - [Test] Acc: 0.696, NLL: 0.883
+2025-03-31 15:53:43,511 - root - INFO - [Test] Acc: 0.702, NLL: 0.855
+2025-03-31 15:53:43,543 - root - INFO - Best model saved at epoch 30
+2025-03-31 15:54:01,630 - root - INFO - [Test] Acc: 0.705, NLL: 0.846
+2025-03-31 15:54:01,686 - root - INFO - Best model saved at epoch 31
+2025-03-31 15:54:20,321 - root - INFO - [Test] Acc: 0.708, NLL: 0.848
+2025-03-31 15:54:38,898 - root - INFO - [Test] Acc: 0.707, NLL: 0.863
+2025-03-31 15:54:57,467 - root - INFO - [Test] Acc: 0.699, NLL: 0.870
+2025-03-31 15:55:15,703 - root - INFO - [Test] Acc: 0.684, NLL: 0.949
+2025-03-31 15:55:33,838 - root - INFO - [Test] Acc: 0.722, NLL: 0.801
+2025-03-31 15:55:33,886 - root - INFO - Best model saved at epoch 36
+2025-03-31 15:55:52,168 - root - INFO - [Test] Acc: 0.718, NLL: 0.835
+2025-03-31 15:56:10,783 - root - INFO - [Test] Acc: 0.713, NLL: 0.848
+2025-03-31 15:56:29,173 - root - INFO - [Test] Acc: 0.714, NLL: 0.836
+2025-03-31 15:56:47,759 - root - INFO - [Test] Acc: 0.726, NLL: 0.790
+2025-03-31 15:56:47,814 - root - INFO - Best model saved at epoch 40
+2025-03-31 15:57:06,255 - root - INFO - [Test] Acc: 0.734, NLL: 0.799
+2025-03-31 15:57:24,624 - root - INFO - [Test] Acc: 0.736, NLL: 0.777
+2025-03-31 15:57:24,677 - root - INFO - Best model saved at epoch 42
+2025-03-31 15:57:42,653 - root - INFO - [Test] Acc: 0.740, NLL: 0.763
+2025-03-31 15:57:42,761 - root - INFO - Best model saved at epoch 43
+2025-03-31 15:58:01,069 - root - INFO - [Test] Acc: 0.740, NLL: 0.782
+2025-03-31 15:58:19,629 - root - INFO - [Test] Acc: 0.748, NLL: 0.744
+2025-03-31 15:58:19,675 - root - INFO - Best model saved at epoch 45
+2025-03-31 15:58:38,073 - root - INFO - [Test] Acc: 0.745, NLL: 0.751
+2025-03-31 15:58:55,956 - root - INFO - [Test] Acc: 0.749, NLL: 0.728
+2025-03-31 15:58:55,993 - root - INFO - Best model saved at epoch 47
+2025-03-31 15:59:14,015 - root - INFO - [Test] Acc: 0.734, NLL: 0.776
+2025-03-31 15:59:32,214 - root - INFO - [Test] Acc: 0.752, NLL: 0.749
+2025-03-31 15:59:50,622 - root - INFO - [Test] Acc: 0.735, NLL: 0.765
+2025-03-31 16:00:08,955 - root - INFO - [Test] Acc: 0.751, NLL: 0.728
+2025-03-31 16:00:09,010 - root - INFO - Best model saved at epoch 51
+2025-03-31 16:00:27,394 - root - INFO - [Test] Acc: 0.742, NLL: 0.767
+2025-03-31 16:00:45,726 - root - INFO - [Test] Acc: 0.749, NLL: 0.731
+2025-03-31 16:01:04,307 - root - INFO - [Test] Acc: 0.754, NLL: 0.736
+2025-03-31 16:01:23,009 - root - INFO - [Test] Acc: 0.758, NLL: 0.717
+2025-03-31 16:01:23,065 - root - INFO - Best model saved at epoch 55
+2025-03-31 16:01:41,591 - root - INFO - [Test] Acc: 0.755, NLL: 0.756
+2025-03-31 16:01:59,876 - root - INFO - [Test] Acc: 0.748, NLL: 0.777
+2025-03-31 16:02:18,386 - root - INFO - [Test] Acc: 0.753, NLL: 0.731
+2025-03-31 16:02:36,680 - root - INFO - [Test] Acc: 0.760, NLL: 0.715
+2025-03-31 16:02:36,715 - root - INFO - Best model saved at epoch 59
+2025-03-31 16:02:55,570 - root - INFO - [Test] Acc: 0.767, NLL: 0.693
+2025-03-31 16:02:55,606 - root - INFO - Best model saved at epoch 60
+2025-03-31 16:03:14,354 - root - INFO - [Test] Acc: 0.765, NLL: 0.715
+2025-03-31 16:03:33,273 - root - INFO - [Test] Acc: 0.769, NLL: 0.697
+2025-03-31 16:03:51,738 - root - INFO - [Test] Acc: 0.773, NLL: 0.663
+2025-03-31 16:03:51,788 - root - INFO - Best model saved at epoch 63
+2025-03-31 16:04:10,516 - root - INFO - [Test] Acc: 0.770, NLL: 0.695
+2025-03-31 16:04:29,096 - root - INFO - [Test] Acc: 0.761, NLL: 0.713
+2025-03-31 16:04:47,677 - root - INFO - [Test] Acc: 0.768, NLL: 0.719
+2025-03-31 16:05:06,203 - root - INFO - [Test] Acc: 0.756, NLL: 0.721
+2025-03-31 16:05:24,687 - root - INFO - [Test] Acc: 0.770, NLL: 0.688
+2025-03-31 16:05:43,186 - root - INFO - [Test] Acc: 0.778, NLL: 0.660
+2025-03-31 16:05:43,232 - root - INFO - Best model saved at epoch 69
+2025-03-31 16:06:01,836 - root - INFO - [Test] Acc: 0.775, NLL: 0.676
+2025-03-31 16:06:20,286 - root - INFO - [Test] Acc: 0.779, NLL: 0.660
+2025-03-31 16:06:39,080 - root - INFO - [Test] Acc: 0.780, NLL: 0.661
+2025-03-31 16:06:57,624 - root - INFO - [Test] Acc: 0.787, NLL: 0.641
+2025-03-31 16:06:57,670 - root - INFO - Best model saved at epoch 73
+2025-03-31 16:07:16,544 - root - INFO - [Test] Acc: 0.776, NLL: 0.698
+2025-03-31 16:07:35,118 - root - INFO - [Test] Acc: 0.778, NLL: 0.679
+2025-03-31 16:07:53,930 - root - INFO - [Test] Acc: 0.784, NLL: 0.649
+2025-03-31 16:08:12,513 - root - INFO - [Test] Acc: 0.769, NLL: 0.686
+2025-03-31 16:08:31,403 - root - INFO - [Test] Acc: 0.783, NLL: 0.670
+2025-03-31 16:08:50,142 - root - INFO - [Test] Acc: 0.784, NLL: 0.659
+2025-03-31 16:09:08,877 - root - INFO - [Test] Acc: 0.783, NLL: 0.642
+2025-03-31 16:09:27,382 - root - INFO - [Test] Acc: 0.789, NLL: 0.640
+2025-03-31 16:09:27,427 - root - INFO - Best model saved at epoch 81
+2025-03-31 16:09:46,330 - root - INFO - [Test] Acc: 0.795, NLL: 0.618
+2025-03-31 16:09:46,386 - root - INFO - Best model saved at epoch 82
+2025-03-31 16:10:05,045 - root - INFO - [Test] Acc: 0.780, NLL: 0.659
+2025-03-31 16:10:23,884 - root - INFO - [Test] Acc: 0.797, NLL: 0.622
+2025-03-31 16:10:42,452 - root - INFO - [Test] Acc: 0.794, NLL: 0.633
+2025-03-31 16:11:01,408 - root - INFO - [Test] Acc: 0.786, NLL: 0.648
+2025-03-31 16:11:20,343 - root - INFO - [Test] Acc: 0.789, NLL: 0.635
+2025-03-31 16:11:39,152 - root - INFO - [Test] Acc: 0.791, NLL: 0.630
+2025-03-31 16:11:56,917 - root - INFO - [Test] Acc: 0.779, NLL: 0.686
+2025-03-31 16:12:14,865 - root - INFO - [Test] Acc: 0.797, NLL: 0.616
+2025-03-31 16:12:14,908 - root - INFO - Best model saved at epoch 90
+2025-03-31 16:12:32,804 - root - INFO - [Test] Acc: 0.785, NLL: 0.651
+2025-03-31 16:12:50,918 - root - INFO - [Test] Acc: 0.798, NLL: 0.624
+2025-03-31 16:13:08,696 - root - INFO - [Test] Acc: 0.802, NLL: 0.600
+2025-03-31 16:13:08,749 - root - INFO - Best model saved at epoch 93
+2025-03-31 16:13:26,903 - root - INFO - [Test] Acc: 0.797, NLL: 0.611
+2025-03-31 16:13:44,733 - root - INFO - [Test] Acc: 0.793, NLL: 0.641
+2025-03-31 16:14:02,850 - root - INFO - [Test] Acc: 0.787, NLL: 0.691
+2025-03-31 16:14:20,730 - root - INFO - [Test] Acc: 0.793, NLL: 0.649
+2025-03-31 16:14:38,853 - root - INFO - [Test] Acc: 0.800, NLL: 0.634
+2025-03-31 16:14:56,741 - root - INFO - [Test] Acc: 0.794, NLL: 0.642
+2025-03-31 16:15:14,805 - root - INFO - [Test] Acc: 0.806, NLL: 0.597
+2025-03-31 16:15:14,863 - root - INFO - Best model saved at epoch 100
+2025-03-31 16:15:32,851 - root - INFO - [Test] Acc: 0.805, NLL: 0.602
+2025-03-31 16:15:51,020 - root - INFO - [Test] Acc: 0.796, NLL: 0.637
+2025-03-31 16:16:09,063 - root - INFO - [Test] Acc: 0.806, NLL: 0.616
+2025-03-31 16:16:27,160 - root - INFO - [Test] Acc: 0.806, NLL: 0.616
+2025-03-31 16:16:45,205 - root - INFO - [Test] Acc: 0.803, NLL: 0.620
+2025-03-31 16:17:03,134 - root - INFO - [Test] Acc: 0.793, NLL: 0.648
+2025-03-31 16:17:21,045 - root - INFO - [Test] Acc: 0.798, NLL: 0.658
+2025-03-31 16:17:39,327 - root - INFO - [Test] Acc: 0.813, NLL: 0.583
+2025-03-31 16:17:39,370 - root - INFO - Best model saved at epoch 108
+2025-03-31 16:17:57,584 - root - INFO - [Test] Acc: 0.809, NLL: 0.586
+2025-03-31 16:18:16,575 - root - INFO - [Test] Acc: 0.810, NLL: 0.580
+2025-03-31 16:18:16,612 - root - INFO - Best model saved at epoch 110
+2025-03-31 16:18:35,664 - root - INFO - [Test] Acc: 0.806, NLL: 0.601
+2025-03-31 16:18:51,451 - root - INFO - [Test] Acc: 0.803, NLL: 0.626
+2025-03-31 16:19:06,702 - root - INFO - [Test] Acc: 0.800, NLL: 0.624
+2025-03-31 16:19:22,447 - root - INFO - [Test] Acc: 0.801, NLL: 0.616
+2025-03-31 16:19:37,084 - root - INFO - [Test] Acc: 0.814, NLL: 0.571
+2025-03-31 16:19:37,139 - root - INFO - Best model saved at epoch 115
+2025-03-31 16:19:52,083 - root - INFO - [Test] Acc: 0.792, NLL: 0.647
+2025-03-31 16:20:06,652 - root - INFO - [Test] Acc: 0.809, NLL: 0.578
+2025-03-31 16:20:20,998 - root - INFO - [Test] Acc: 0.804, NLL: 0.604
+2025-03-31 16:20:35,891 - root - INFO - [Test] Acc: 0.809, NLL: 0.578
+2025-03-31 16:20:50,286 - root - INFO - [Test] Acc: 0.806, NLL: 0.623
+2025-03-31 16:21:05,129 - root - INFO - [Test] Acc: 0.806, NLL: 0.620
+2025-03-31 16:21:20,600 - root - INFO - [Test] Acc: 0.807, NLL: 0.612
+2025-03-31 16:21:35,768 - root - INFO - [Test] Acc: 0.807, NLL: 0.629
+2025-03-31 16:21:50,831 - root - INFO - [Test] Acc: 0.812, NLL: 0.604
+2025-03-31 16:22:06,134 - root - INFO - [Test] Acc: 0.812, NLL: 0.574
+2025-03-31 16:22:21,821 - root - INFO - [Test] Acc: 0.810, NLL: 0.605
+2025-03-31 16:22:36,958 - root - INFO - [Test] Acc: 0.811, NLL: 0.616
+2025-03-31 16:22:51,988 - root - INFO - [Test] Acc: 0.814, NLL: 0.598
+2025-03-31 16:23:06,996 - root - INFO - [Test] Acc: 0.806, NLL: 0.596
+2025-03-31 16:23:21,776 - root - INFO - [Test] Acc: 0.804, NLL: 0.610
+2025-03-31 16:23:36,519 - root - INFO - [Test] Acc: 0.806, NLL: 0.625
+2025-03-31 16:23:51,105 - root - INFO - [Test] Acc: 0.812, NLL: 0.581
+2025-03-31 16:24:06,162 - root - INFO - [Test] Acc: 0.820, NLL: 0.560
+2025-03-31 16:24:06,191 - root - INFO - Best model saved at epoch 133
+2025-03-31 16:24:20,621 - root - INFO - [Test] Acc: 0.811, NLL: 0.606
+2025-03-31 16:24:35,859 - root - INFO - [Test] Acc: 0.816, NLL: 0.573
+2025-03-31 16:24:50,232 - root - INFO - [Test] Acc: 0.811, NLL: 0.590
+2025-03-31 16:25:04,950 - root - INFO - [Test] Acc: 0.817, NLL: 0.576
+2025-03-31 16:25:19,456 - root - INFO - [Test] Acc: 0.817, NLL: 0.578
+2025-03-31 16:25:34,095 - root - INFO - [Test] Acc: 0.810, NLL: 0.602
+2025-03-31 16:25:49,062 - root - INFO - [Test] Acc: 0.814, NLL: 0.593
+2025-03-31 16:26:03,873 - root - INFO - [Test] Acc: 0.822, NLL: 0.571
+2025-03-31 16:26:18,897 - root - INFO - [Test] Acc: 0.820, NLL: 0.563
+2025-03-31 16:26:33,803 - root - INFO - [Test] Acc: 0.799, NLL: 0.664
+2025-03-31 16:26:48,817 - root - INFO - [Test] Acc: 0.825, NLL: 0.560
+2025-03-31 16:26:48,847 - root - INFO - Best model saved at epoch 144
+2025-03-31 16:27:03,617 - root - INFO - [Test] Acc: 0.802, NLL: 0.632
+2025-03-31 16:27:18,124 - root - INFO - [Test] Acc: 0.814, NLL: 0.580
+2025-03-31 16:27:32,914 - root - INFO - [Test] Acc: 0.812, NLL: 0.618
+2025-03-31 16:27:47,776 - root - INFO - [Test] Acc: 0.812, NLL: 0.596
+2025-03-31 16:28:02,719 - root - INFO - [Test] Acc: 0.817, NLL: 0.571
+2025-03-31 16:28:17,557 - root - INFO - [Test] Acc: 0.804, NLL: 0.638
+2025-03-31 16:28:32,447 - root - INFO - [Test] Acc: 0.816, NLL: 0.607
+2025-03-31 16:28:47,572 - root - INFO - [Test] Acc: 0.817, NLL: 0.568
+2025-03-31 16:29:02,589 - root - INFO - [Test] Acc: 0.830, NLL: 0.537
+2025-03-31 16:29:02,641 - root - INFO - Best model saved at epoch 153
+2025-03-31 16:29:17,593 - root - INFO - [Test] Acc: 0.811, NLL: 0.608
+2025-03-31 16:29:32,357 - root - INFO - [Test] Acc: 0.821, NLL: 0.579
+2025-03-31 16:29:48,801 - root - INFO - [Test] Acc: 0.819, NLL: 0.582
+2025-03-31 16:30:04,151 - root - INFO - [Test] Acc: 0.813, NLL: 0.608
+2025-03-31 16:30:19,672 - root - INFO - [Test] Acc: 0.817, NLL: 0.601
+2025-03-31 16:30:34,858 - root - INFO - [Test] Acc: 0.821, NLL: 0.580
+2025-03-31 16:30:50,313 - root - INFO - [Test] Acc: 0.820, NLL: 0.589
+2025-03-31 16:31:05,470 - root - INFO - [Test] Acc: 0.816, NLL: 0.591
+2025-03-31 16:31:20,605 - root - INFO - [Test] Acc: 0.826, NLL: 0.558
+2025-03-31 16:31:35,408 - root - INFO - [Test] Acc: 0.820, NLL: 0.595
+2025-03-31 16:31:50,269 - root - INFO - [Test] Acc: 0.825, NLL: 0.583
+2025-03-31 16:32:05,711 - root - INFO - [Test] Acc: 0.819, NLL: 0.609
+2025-03-31 16:32:20,488 - root - INFO - [Test] Acc: 0.818, NLL: 0.623
+2025-03-31 16:32:35,860 - root - INFO - [Test] Acc: 0.825, NLL: 0.576
+2025-03-31 16:32:50,956 - root - INFO - [Test] Acc: 0.825, NLL: 0.591
+2025-03-31 16:33:06,889 - root - INFO - [Test] Acc: 0.824, NLL: 0.569
+2025-03-31 16:33:22,762 - root - INFO - [Test] Acc: 0.817, NLL: 0.584
+2025-03-31 16:33:37,895 - root - INFO - [Test] Acc: 0.829, NLL: 0.554
+2025-03-31 16:33:52,694 - root - INFO - [Test] Acc: 0.817, NLL: 0.595
+2025-03-31 16:34:07,680 - root - INFO - [Test] Acc: 0.817, NLL: 0.609
+2025-03-31 16:34:22,979 - root - INFO - [Test] Acc: 0.830, NLL: 0.549
+2025-03-31 16:34:37,841 - root - INFO - [Test] Acc: 0.831, NLL: 0.551
+2025-03-31 16:34:53,087 - root - INFO - [Test] Acc: 0.828, NLL: 0.566
+2025-03-31 16:35:08,014 - root - INFO - [Test] Acc: 0.815, NLL: 0.617
+2025-03-31 16:35:22,926 - root - INFO - [Test] Acc: 0.819, NLL: 0.600
+2025-03-31 16:35:38,230 - root - INFO - [Test] Acc: 0.814, NLL: 0.589
+2025-03-31 16:35:53,795 - root - INFO - [Test] Acc: 0.826, NLL: 0.572
+2025-03-31 16:36:08,499 - root - INFO - [Test] Acc: 0.827, NLL: 0.575
+2025-03-31 16:36:23,809 - root - INFO - [Test] Acc: 0.831, NLL: 0.545
+2025-03-31 16:36:38,965 - root - INFO - [Test] Acc: 0.815, NLL: 0.613
+2025-03-31 16:36:54,281 - root - INFO - [Test] Acc: 0.823, NLL: 0.604
+2025-03-31 16:37:09,383 - root - INFO - [Test] Acc: 0.827, NLL: 0.531
+2025-03-31 16:37:09,414 - root - INFO - Best model saved at epoch 185
+2025-03-31 16:37:24,461 - root - INFO - [Test] Acc: 0.825, NLL: 0.582
+2025-03-31 16:37:39,936 - root - INFO - [Test] Acc: 0.825, NLL: 0.580
+2025-03-31 16:37:55,341 - root - INFO - [Test] Acc: 0.823, NLL: 0.594
+2025-03-31 16:38:10,271 - root - INFO - [Test] Acc: 0.826, NLL: 0.617
+2025-03-31 16:38:24,827 - root - INFO - [Test] Acc: 0.820, NLL: 0.614
+2025-03-31 16:38:39,907 - root - INFO - [Test] Acc: 0.831, NLL: 0.590
+2025-03-31 16:38:55,360 - root - INFO - [Test] Acc: 0.820, NLL: 0.584
+2025-03-31 16:39:11,164 - root - INFO - [Test] Acc: 0.823, NLL: 0.592
+2025-03-31 16:39:26,577 - root - INFO - [Test] Acc: 0.825, NLL: 0.592
+2025-03-31 16:39:41,485 - root - INFO - [Test] Acc: 0.833, NLL: 0.556
+2025-03-31 16:39:56,884 - root - INFO - [Test] Acc: 0.832, NLL: 0.552
+2025-03-31 16:40:11,939 - root - INFO - [Test] Acc: 0.808, NLL: 0.655
+2025-03-31 16:40:26,729 - root - INFO - [Test] Acc: 0.830, NLL: 0.550
+2025-03-31 16:40:41,993 - root - INFO - [Test] Acc: 0.831, NLL: 0.564
+2025-03-31 16:40:56,696 - root - INFO - [Test] Acc: 0.826, NLL: 0.580
+2025-03-31 16:41:12,106 - root - INFO - [Test] Acc: 0.837, NLL: 0.542
+2025-03-31 16:41:27,252 - root - INFO - [Test] Acc: 0.823, NLL: 0.584
+2025-03-31 16:41:42,435 - root - INFO - [Test] Acc: 0.828, NLL: 0.569
+2025-03-31 16:41:57,247 - root - INFO - [Test] Acc: 0.827, NLL: 0.572
+2025-03-31 16:42:12,653 - root - INFO - [Test] Acc: 0.826, NLL: 0.579
+2025-03-31 16:42:27,964 - root - INFO - [Test] Acc: 0.834, NLL: 0.559
+2025-03-31 16:42:43,410 - root - INFO - [Test] Acc: 0.812, NLL: 0.642
+2025-03-31 16:42:58,914 - root - INFO - [Test] Acc: 0.827, NLL: 0.559
+2025-03-31 16:43:13,672 - root - INFO - [Test] Acc: 0.830, NLL: 0.577
+2025-03-31 16:43:29,395 - root - INFO - [Test] Acc: 0.829, NLL: 0.570
+2025-03-31 16:43:44,398 - root - INFO - [Test] Acc: 0.829, NLL: 0.565
+2025-03-31 16:43:58,024 - root - INFO - [Test] Acc: 0.821, NLL: 0.585
+2025-03-31 16:44:11,472 - root - INFO - [Test] Acc: 0.829, NLL: 0.599
+2025-03-31 16:44:25,374 - root - INFO - [Test] Acc: 0.835, NLL: 0.534
+2025-03-31 16:44:40,898 - root - INFO - [Test] Acc: 0.833, NLL: 0.578
+2025-03-31 16:44:58,815 - root - INFO - [Test] Acc: 0.823, NLL: 0.611
+2025-03-31 16:45:13,016 - root - INFO - [Test] Acc: 0.838, NLL: 0.554
+2025-03-31 16:45:28,304 - root - INFO - [Test] Acc: 0.823, NLL: 0.620
+2025-03-31 16:45:42,653 - root - INFO - [Test] Acc: 0.831, NLL: 0.586
+2025-03-31 16:45:56,948 - root - INFO - [Test] Acc: 0.827, NLL: 0.640
+2025-03-31 16:46:10,244 - root - INFO - [Test] Acc: 0.830, NLL: 0.567
+2025-03-31 16:46:23,800 - root - INFO - [Test] Acc: 0.833, NLL: 0.561
+2025-03-31 16:46:37,143 - root - INFO - [Test] Acc: 0.818, NLL: 0.659
+2025-03-31 16:46:50,999 - root - INFO - [Test] Acc: 0.832, NLL: 0.587
+2025-03-31 16:47:04,192 - root - INFO - [Test] Acc: 0.834, NLL: 0.565
+2025-03-31 16:47:17,788 - root - INFO - [Test] Acc: 0.834, NLL: 0.574
+2025-03-31 16:47:31,190 - root - INFO - [Test] Acc: 0.832, NLL: 0.582
+2025-03-31 16:47:44,989 - root - INFO - [Test] Acc: 0.837, NLL: 0.550
+2025-03-31 16:47:58,555 - root - INFO - [Test] Acc: 0.833, NLL: 0.570
+2025-03-31 16:48:12,090 - root - INFO - [Test] Acc: 0.835, NLL: 0.552
+2025-03-31 16:48:25,472 - root - INFO - [Test] Acc: 0.838, NLL: 0.536
+2025-03-31 16:48:39,293 - root - INFO - [Test] Acc: 0.819, NLL: 0.625
+2025-03-31 16:48:53,185 - root - INFO - [Test] Acc: 0.832, NLL: 0.572
+2025-03-31 16:49:06,989 - root - INFO - [Test] Acc: 0.828, NLL: 0.592
+2025-03-31 16:49:20,715 - root - INFO - [Test] Acc: 0.836, NLL: 0.569
+2025-03-31 16:49:34,434 - root - INFO - [Test] Acc: 0.830, NLL: 0.587
+2025-03-31 16:49:48,532 - root - INFO - [Test] Acc: 0.825, NLL: 0.623
+2025-03-31 16:50:02,473 - root - INFO - [Test] Acc: 0.820, NLL: 0.640
+2025-03-31 16:50:16,545 - root - INFO - [Test] Acc: 0.837, NLL: 0.543
+2025-03-31 16:50:30,143 - root - INFO - [Test] Acc: 0.830, NLL: 0.566
+2025-03-31 16:50:43,931 - root - INFO - [Test] Acc: 0.834, NLL: 0.585
+2025-03-31 16:50:58,638 - root - INFO - [Test] Acc: 0.835, NLL: 0.600
+2025-03-31 16:51:12,365 - root - INFO - [Test] Acc: 0.836, NLL: 0.561
+2025-03-31 16:51:26,111 - root - INFO - [Test] Acc: 0.836, NLL: 0.573
+2025-03-31 16:51:39,696 - root - INFO - [Test] Acc: 0.841, NLL: 0.539
+2025-03-31 16:51:53,532 - root - INFO - [Test] Acc: 0.839, NLL: 0.604
+2025-03-31 16:52:07,446 - root - INFO - [Test] Acc: 0.834, NLL: 0.604
+2025-03-31 16:52:21,411 - root - INFO - [Test] Acc: 0.838, NLL: 0.544
+2025-03-31 16:52:35,397 - root - INFO - [Test] Acc: 0.839, NLL: 0.571
+2025-03-31 16:52:48,849 - root - INFO - [Test] Acc: 0.835, NLL: 0.559
+2025-03-31 16:53:02,512 - root - INFO - [Test] Acc: 0.835, NLL: 0.589
+2025-03-31 16:53:16,367 - root - INFO - [Test] Acc: 0.814, NLL: 0.634
+2025-03-31 16:53:30,749 - root - INFO - [Test] Acc: 0.840, NLL: 0.556
+2025-03-31 16:53:45,034 - root - INFO - [Test] Acc: 0.842, NLL: 0.563
+2025-03-31 16:53:59,178 - root - INFO - [Test] Acc: 0.834, NLL: 0.595
+2025-03-31 16:54:13,270 - root - INFO - [Test] Acc: 0.834, NLL: 0.596
+2025-03-31 16:54:31,940 - root - INFO - [Test] Acc: 0.832, NLL: 0.601
+2025-03-31 16:54:51,342 - root - INFO - [Test] Acc: 0.836, NLL: 0.580
+2025-03-31 16:55:10,201 - root - INFO - [Test] Acc: 0.836, NLL: 0.596
+2025-03-31 16:55:25,034 - root - INFO - [Test] Acc: 0.821, NLL: 0.645
+2025-03-31 16:55:44,266 - root - INFO - [Test] Acc: 0.827, NLL: 0.618
+2025-03-31 16:56:03,549 - root - INFO - [Test] Acc: 0.837, NLL: 0.587
+2025-03-31 16:56:22,230 - root - INFO - [Test] Acc: 0.835, NLL: 0.588
+2025-03-31 16:56:41,465 - root - INFO - [Test] Acc: 0.841, NLL: 0.583
+2025-03-31 16:57:00,062 - root - INFO - [Test] Acc: 0.837, NLL: 0.563
+2025-03-31 16:57:18,958 - root - INFO - [Test] Acc: 0.833, NLL: 0.622
+2025-03-31 16:57:38,229 - root - INFO - [Test] Acc: 0.833, NLL: 0.623
+2025-03-31 16:57:57,923 - root - INFO - [Test] Acc: 0.838, NLL: 0.566
+2025-03-31 16:58:19,071 - root - INFO - [Test] Acc: 0.841, NLL: 0.551
+2025-03-31 16:58:40,818 - root - INFO - [Test] Acc: 0.836, NLL: 0.586
+2025-03-31 16:59:02,065 - root - INFO - [Test] Acc: 0.837, NLL: 0.610
+2025-03-31 16:59:23,132 - root - INFO - [Test] Acc: 0.833, NLL: 0.595
+2025-03-31 16:59:44,476 - root - INFO - [Test] Acc: 0.833, NLL: 0.584
+2025-03-31 17:00:06,574 - root - INFO - [Test] Acc: 0.839, NLL: 0.585
+2025-03-31 17:00:28,216 - root - INFO - [Test] Acc: 0.833, NLL: 0.574
+2025-03-31 17:00:49,276 - root - INFO - [Test] Acc: 0.838, NLL: 0.589
+2025-03-31 17:01:10,211 - root - INFO - [Test] Acc: 0.838, NLL: 0.566
+2025-03-31 17:01:31,451 - root - INFO - [Test] Acc: 0.838, NLL: 0.576
+2025-03-31 17:01:52,663 - root - INFO - [Test] Acc: 0.835, NLL: 0.593
+2025-03-31 17:02:14,084 - root - INFO - [Test] Acc: 0.842, NLL: 0.573
+2025-03-31 17:02:34,996 - root - INFO - [Test] Acc: 0.838, NLL: 0.594
+2025-03-31 17:02:56,444 - root - INFO - [Test] Acc: 0.839, NLL: 0.597
+2025-03-31 17:03:17,801 - root - INFO - [Test] Acc: 0.832, NLL: 0.607
+2025-03-31 17:03:39,412 - root - INFO - [Test] Acc: 0.829, NLL: 0.640
+2025-03-31 17:04:00,840 - root - INFO - [Test] Acc: 0.834, NLL: 0.616
+2025-03-31 17:04:00,853 - root - INFO - Early stopping at epoch 285
