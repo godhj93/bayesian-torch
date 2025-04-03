@@ -315,7 +315,7 @@ def get_model(args, logger, distill=False):
             
         if args.model == 'resnet20':
             model = resnet20_deterministic()
-            
+
         elif args.model == 'resnet18':
             model = ResNet18_dnn()
             
@@ -400,34 +400,8 @@ def get_model(args, logger, distill=False):
         logger.info(colored(f"{args.type} Conv1 input channel is changed to 1", 'red'))
     
     elif args.data =='cifar10':
-        if args.model == 'lenet':
-            if args.type == 'multi':
-                model.conv1 = Conv2dReparameterization_Multivariate(3, 6, 5, 1, 0)
-            elif args.type == 'dnn':
-                model.conv1 = torch.nn.Conv2d(3, 6, 5, 1)
-            elif args.type == 'uni':
-                model.conv1 = Conv2dReparameterization(3, 6, 5, 1, 0)
-            else:
-                raise NotImplementedError("Not implemented yet")
-        elif args.model == 'simple':
-            if args.type == 'multi':
-                model.conv1 = Conv2dReparameterization_Multivariate(
-                    in_channels = 3, 
-                    out_channels = 6, 
-                    kernel_size = 3, 
-                    stride = 1,
-                    padding = 0)
 
-            elif args.type == 'dnn':
-                model.conv1 = torch.nn.Conv2d(3, 6, 3, 1)
-
-            elif args.type == 'uni':
-                model.conv1 = Conv2dReparameterization(3, 6, 3, 1)
-
-            else:
-                raise NotImplementedError("Not implemented yet")
-        else:
-            logger.info(colored(f"{args.model} will be used.", 'red'))
+        logger.info(colored(f"{args.model} will be used.", 'red'))
         logger.info(colored(f"{args.type} Conv1 input channel is changed to 3", 'red'))
     
     elif args.data == 'cifar100':
@@ -445,6 +419,7 @@ def get_model(args, logger, distill=False):
             if args.type =='dnn':
                 model.base_model.fc = torch.nn.Linear(512, 100)
                 
+        
         else:
             
             raise NotImplementedError("Not implemented yet")

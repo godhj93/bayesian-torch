@@ -97,12 +97,22 @@ def main(args):
         for key, value in vars(args).items():
             f.write(f"{key}: {value}\n")
             
+    # Optimizer
+    if args.optimizer == 'sgd':
+        optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+    elif args.optimizer == 'adam':
+        optim = torch.optim.Adam(bnn.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        args.momentum = None
+        args.nesterov = None
+    # optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+    logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
+
     train_BNN(
         epoch = args.epochs,
         model = bnn.cuda(),
         train_loader = train_loader,
         test_loader = test_loader,
-        optimizer = optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov),
+        optimizer = optim,
         writer = writer,
         mc_runs = args.mc_runs,
         bs = args.bs,

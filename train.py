@@ -95,6 +95,7 @@ def main(args):
         'date': date.split('-')[0],
         'type': args.type,
         'bs': args.bs,
+        'opt': args.optimizer,
         'lr': args.lr,
         'mc_runs': args.mc_runs,
         'epochs': args.epochs,
@@ -123,8 +124,12 @@ def main(args):
     train_loader, test_loader = get_dataset(args = args, logger = logger)
     
     # Optimizer
-    optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
-    
+    if args.optimizer == 'sgd':
+        optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+    elif args.optimizer == 'adam':
+        optim = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    # optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+    logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
     # Save the training arguments
     with open(f"{log_path}/config.txt", "w") as f:
         for key, value in vars(args).items():
@@ -203,7 +208,7 @@ if __name__ == '__main__':
     parser.add_argument('--martern', action='store_true', help='Use Martern Prior')
     parser.add_argument('--multi_moped', action='store_true', help='Use Multi-MOPED')
     parser.add_argument('--prune', action='store_true', help='Use pruning')
-    parser.add_argument('--optimizer', type=str, default='sgd', help='Optimizer to use [sgd]')
+    parser.add_argument('--optimizer', type=str, default='sgd', help='Optimizer to use [sgd, adam]')
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
     parser.add_argument('--nesterov', action='store_true', help='Use Nesterov')
