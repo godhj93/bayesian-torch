@@ -104,6 +104,8 @@ def main(args):
         optim = torch.optim.Adam(bnn.parameters(), lr=args.lr)
         args.momentum = None
         args.nesterov = None
+        args.weight_decay = None
+
     # optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
     logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
 
