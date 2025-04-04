@@ -38,23 +38,42 @@ def main(args):
     sparsity = zero/total
     args.sparsity = sparsity  
     
-    # log_path를 위한 파라미터들을 dict로 구성
+    # Optimizer
+    if args.optimizer == 'sgd':
+        
+        optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+    
+    elif args.optimizer == 'adam':
+    
+        optim = torch.optim.Adam(model.parameters(), lr=args.lr)
+        args.momentum = None
+        args.nesterov = None
+        args.weight_decay = None
+    
+    else:
+        raise ValueError(f"Unsupported optimizer: {args.optimizer}")        
+        
+    logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
+    
     log_params = {
         'data': args.data,
         'model': args.model,
         'date': date.split('-')[0],
         'type': args.type,
         'bs': args.bs,
+        'opt': args.optimizer,
+        'momentum': args.momentum,
+        'weight_decay': args.weight_decay,
+        'nesterov': args.nesterov,
         'lr': args.lr,
         'mc_runs': args.mc_runs,
         'epochs': args.epochs,
-        'moped': args.MOPED,
+        'moped': args.moped,
         'timestamp': date,
         'sparsity': sparsity,
-        
-        }
 
-    # log_params의 항목들을 key=value 형식으로 자동으로 조합하여 log_path 구성
+    }
+
     params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type']])
     
     log_path = f"runs/{log_params['data']}/{log_params['model']}/{log_params['date']}/{log_params['type']}/{log_params['sparsity']}/{params_str}"
@@ -96,19 +115,7 @@ def main(args):
     with open(f"{log_path}/config.txt", "w") as f:
         for key, value in vars(args).items():
             f.write(f"{key}: {value}\n")
-            
-    # Optimizer
-    if args.optimizer == 'sgd':
-        optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
-    elif args.optimizer == 'adam':
-        optim = torch.optim.Adam(bnn.parameters(), lr=args.lr)
-        args.momentum = None
-        args.nesterov = None
-        args.weight_decay = None
-
-    # optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
-    logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
-
+       
     train_BNN(
         epoch = args.epochs,
         model = bnn.cuda(),
@@ -143,7 +150,7 @@ if __name__ == '__main__':
     parser.add_argument('--martern', action='store_true', help='Use Martern Prior')
     parser.add_argument('--multi_moped', action='store_true', help='Use Multi-MOPED')
     parser.add_argument('--prune', action='store_true', help='Use pruning')
-    parser.add_argument('--optimizer', type=str, default='sgd', help='Optimizer to use [sgd]')
+    parser.add_argument('--optimizer', type=str, help='Optimizer to use [sgd]')
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
     parser.add_argument('--nesterov', action='store_true', help='Use Nesterov')

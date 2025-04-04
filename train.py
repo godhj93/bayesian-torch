@@ -66,9 +66,7 @@ def prune_model(model, sparsity, logger):
             # 프루닝 후 각 모듈에는 'weight_mask' 버퍼가 생성됩니다.
             remaining_params = module.weight_mask.sum().item() if hasattr(module, 'weight_mask') else total_params
             pruned_percentage = 1 - (remaining_params / total_params)
-            # print(colored(f"Pruned {name}: {pruned_percentage:.2%} of weights set to 0", 'yellow'))
         else:
-            # print(colored(f"Skipping {name}: Not a prunable layer", 'cyan'))
             pass
             
     # Calculate Total Sparsity in the model
@@ -88,7 +86,24 @@ def main(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    # log_path를 위한 파라미터들을 dict로 구성
+    model = get_model(args = args, logger = logger)
+
+    # Optimizer
+    if args.optimizer == 'sgd':
+        optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+    elif args.optimizer == 'adam':
+        optim = torch.optim.Adam(model.parameters(), lr=args.lr)
+        args.momentum = None
+        args.nesterov = None
+        args.weight_decay = None
+    
+    else:
+        raise ValueError(f"Unsupported optimizer: {args.optimizer}")        
+
+
+        
+    logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
+    
     log_params = {
         'data': args.data,
         'model': args.model,
@@ -96,6 +111,9 @@ def main(args):
         'type': args.type,
         'bs': args.bs,
         'opt': args.optimizer,
+        'momentum': args.momentum,
+        'weight_decay': args.weight_decay,
+        'nesterov': args.nesterov,
         'lr': args.lr,
         'mc_runs': args.mc_runs,
         'epochs': args.epochs,
@@ -103,7 +121,6 @@ def main(args):
         'timestamp': date
     }
 
-    # log_params의 항목들을 key=value 형식으로 자동으로 조합하여 log_path 구성
     params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type']])
     
     log_path = f"runs/{log_params['data']}/{log_params['model']}/{log_params['date']}/{log_params['type']}/{params_str}"
@@ -120,19 +137,8 @@ def main(args):
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
     
-    model = get_model(args = args, logger = logger)
     train_loader, test_loader = get_dataset(args = args, logger = logger)
-    
-    # Optimizer
-    if args.optimizer == 'sgd':
-        optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
-    elif args.optimizer == 'adam':
-        optim = torch.optim.Adam(model.parameters(), lr=args.lr)
-        args.momentum = None
-        args.nesterov = None
-        args.weight_decay = None
-    # optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
-    logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
+   
     # Save the training arguments
     with open(f"{log_path}/config.txt", "w") as f:
         for key, value in vars(args).items():
@@ -211,7 +217,7 @@ if __name__ == '__main__':
     parser.add_argument('--martern', action='store_true', help='Use Martern Prior')
     parser.add_argument('--multi_moped', action='store_true', help='Use Multi-MOPED')
     parser.add_argument('--prune', action='store_true', help='Use pruning')
-    parser.add_argument('--optimizer', type=str, default='sgd', help='Optimizer to use [sgd, adam]')
+    parser.add_argument('--optimizer', type=str, help='Optimizer to use [sgd, adam]')
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
     parser.add_argument('--nesterov', action='store_true', help='Use Nesterov')
