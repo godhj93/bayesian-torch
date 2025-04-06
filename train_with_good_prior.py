@@ -38,14 +38,16 @@ def main(args):
     sparsity = zero/total
     args.sparsity = sparsity  
     
+    bnn = get_model(args = args, logger = logger)
+
     # Optimizer
     if args.optimizer == 'sgd':
         
-        optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+        optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
     
     elif args.optimizer == 'adam':
     
-        optim = torch.optim.Adam(model.parameters(), lr=args.lr)
+        optim = torch.optim.Adam(bnn.parameters(), lr=args.lr)
         args.momentum = None
         args.nesterov = None
         args.weight_decay = None
@@ -68,7 +70,7 @@ def main(args):
         'lr': args.lr,
         'mc_runs': args.mc_runs,
         'epochs': args.epochs,
-        'moped': args.moped,
+        'moped': args.MOPED,
         'timestamp': date,
         'sparsity': sparsity,
 
@@ -90,7 +92,7 @@ def main(args):
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
 
-    bnn = get_model(args = args, logger = logger)
+    # bnn = get_model(args = args, logger = logger)
 
     acc, loss = test_DNN(dnn, test_loader)
     logger.info(colored("Testing DNN", 'green'))

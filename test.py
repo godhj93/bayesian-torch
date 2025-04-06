@@ -3,17 +3,23 @@ from utils.utils import test_BNN, test_DNN, get_model, get_dataset
 import argparse
 from termcolor import colored
 import torch
-from torchvision import datasets, transforms
+import logging
 
 def main(args):
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
     
-    model = get_model(args)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    
+    model = get_model(args = args, logger = logger)
     model.load_state_dict(torch.load(args.weight))
     print(colored(f"Pretrained weight is loaded from {args.weight}", 'green'))
     
-    _, test_loader = get_dataset(args)
+    _, test_loader = get_dataset(args = args, logger = logger)
     
     if args.type == 'dnn':
         

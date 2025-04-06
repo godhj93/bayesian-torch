@@ -90,8 +90,11 @@ def main(args):
 
     # Optimizer
     if args.optimizer == 'sgd':
+        
         optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+    
     elif args.optimizer == 'adam':
+    
         optim = torch.optim.Adam(model.parameters(), lr=args.lr)
         args.momentum = None
         args.nesterov = None
