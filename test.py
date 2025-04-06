@@ -29,7 +29,7 @@ def main(args):
     
     elif args.type == 'uni':
         
-        acc, nll, kld = test_BNN(model, test_loader, bs = 128, device = device, mc_runs = args.mc_runs)
+        acc, nll, kld = test_BNN(model = model, test_loader = test_loader, bs = 128, device = device, mc_runs = args.mc_runs, args = args)
         
         print(colored(f"Acc: {acc:.4f}, NLL: {nll:.4f}, KLD: {kld:.4f}", 'blue'))
         
