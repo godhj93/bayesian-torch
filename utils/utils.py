@@ -39,6 +39,8 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     best_nll = torch.inf
     best_acc = 0
     
+    early_stopping = EarlyStopping(patience=100, min_delta=0.0)
+
     for e in range(epoch):
         if args.train_sampler:
             args.train_sampler.set_epoch(e)            
@@ -128,6 +130,14 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             torch.save(model.state_dict(), os.path.join(writer.log_dir, 'best_acc_model.pth'))
             logger.info(f"Best ACC model saved at epoch {e}")
             
+        early_stopping(val_loss=nll, model=model)
+        if early_stopping.early_stop:
+            logger.info(f"Early stopping at epoch {e+1}")
+            best_model_weight = early_stopping.best_model_state
+            save_path = os.path.join(writer.log_dir, f'best_model.pth')
+            torch.save(best_model_weight, save_path)
+            return False
+        
     torch.save(model.state_dict(), os.path.join(writer.log_dir, 'last_model.pth'))
     logger.info(f"Last model saved")
 
