@@ -139,7 +139,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             torch.save(best_model_weight, save_path)
             
             # Logging the best model
-            model.load_state_dict(torch.load(best_model_weight)).to(device).eval()
+            model.load_state_dict(best_model_weight).to(device).eval()
             best_acc, best_loss, best_kld = test_BNN(model = model, test_loader = test_loader, bs = bs, mc_runs = mc_runs, device = device, args = args)
             logger.info(f"Best NLL model loaded: {best_acc:.5f}, {best_loss:.5f}, {best_kld:.5f}")
             
@@ -149,7 +149,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     logger.info(f"Last model saved")
     
     # Logging the best model
-    model.load_state_dict(torch.load(best_model_weight)).to(device).eval()
+    model.load_state_dict(best_model_weight).to(device).eval()
     best_acc, best_loss, best_kld = test_BNN(model = model, test_loader = test_loader, bs = bs, mc_runs = mc_runs, device = device, args = args)
     logger.info(f"Best NLL model loaded: {best_acc:.5f}, {best_loss:.5f}, {best_kld:.5f}")
 
