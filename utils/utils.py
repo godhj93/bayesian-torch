@@ -345,7 +345,7 @@ def get_model(args, logger, distill=False):
             model = densenet_bc_30()
             
         elif args.model == 'mobilenetv2':
-            model = MobileNetV2_dnn(num_classes=10, width_mult=1.0)
+            model = MobileNetV2_dnn(num_classes=10)
             
         else:
             raise ValueError('Model not found')
@@ -431,7 +431,7 @@ def get_model(args, logger, distill=False):
         if args.model == 'mobilenetv2':
             
             if args.type == 'dnn':
-                model.classifier = torch.nn.Linear(1280, 100)
+                model.base_model.classifier[1] = torch.nn.Linear(1280, 100)
                 
             elif args.type =='uni':
                 raise NotImplementedError("Not implemented yet")
@@ -451,7 +451,7 @@ def get_model(args, logger, distill=False):
         if args.model == 'mobilenetv2':
             
             if args.type == 'dnn':
-                model.classifier = torch.nn.Linear(1280, 200)
+                model.base_model.classifier[1] = torch.nn.Linear(1280, 200)
         
         elif args.model == 'resnet18':
             
