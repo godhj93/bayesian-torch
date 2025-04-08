@@ -11,6 +11,7 @@ from utils.models.resnet_multi import resnet20_multi
 from utils.models.densenet_dnn import densenet_bc_30
 from utils.models.densenet_uni import densenet_bc_30_uni
 from utils.models.mobilenetv2_dnn import MobileNetV2_dnn
+from utils.models.mobilenetv2_uni import MobileNetV2_uni
 from utils.models.vgg_dnn import VGG7
 from utils.models.vgg_uni import VGG7_uni
 from utils.models.lenet_dnn import LeNet5_dnn
@@ -361,6 +362,9 @@ def get_model(args, logger, distill=False):
 
         elif args.model == 'resnet18':
             model = ResNet18_uni()
+            
+        elif args.model == 'mobilenetv2':
+            model = MobileNetV2_uni()
         else:
             raise ValueError('Model not found')
         
