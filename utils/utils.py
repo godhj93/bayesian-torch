@@ -16,6 +16,7 @@ from utils.models.vgg_uni import VGG7_uni
 from utils.models.lenet_dnn import LeNet5_dnn
 from utils.models.lenet_uni import LeNet5_uni
 from utils.models.resnet18_dnn import ResNet18_dnn
+from utils.models.resnet18_uni import ResNet18_uni
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
@@ -358,6 +359,8 @@ def get_model(args, logger, distill=False):
         elif args.model == 'densenet30':
             model = densenet_bc_30_uni()
 
+        elif args.model == 'resnet18':
+            model = ResNet18_uni()
         else:
             raise ValueError('Model not found')
         
