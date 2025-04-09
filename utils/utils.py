@@ -18,10 +18,12 @@ from utils.models.lenet_dnn import LeNet5_dnn
 from utils.models.lenet_uni import LeNet5_uni
 from utils.models.resnet18_dnn import ResNet18_dnn
 from utils.models.resnet18_uni import ResNet18_uni
+from utils.models.wideresnet_dnn import *
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
 from bayesian_torch.layers.variational_layers.conv_variational import Conv2dReparameterization, Conv2dReparameterization_Multivariate
+
 # Dataset
 from torchvision import datasets, transforms
 
@@ -343,6 +345,13 @@ def get_model(args, logger, distill=False):
         elif args.model == 'resnet18':
             model = ResNet18_dnn()
             
+        elif args.model == 'wrn10-1':
+            model = wrn10_1()
+            
+        elif args.model == 'wrn10-2':
+            model = wrn10_2()
+            
+            
         elif args.model == 'densenet30':
             model = densenet_bc_30()
             
@@ -367,43 +376,6 @@ def get_model(args, logger, distill=False):
             model = MobileNetV2_uni()
         else:
             raise ValueError('Model not found')
-        
-    # elif args.type == 'multi':
-            
-    #     if args.model == 'resnet20':
-    #         model = resnet20_multi()
-            
-    #     elif args.model == 'densenet30':
-    #         NotImplementedError("Not implemented yet")
-            
-    #     elif args.model == 'mobilenetv2':
-    #         NotImplementedError("Not implemented yet")
-            
-    #     else:
-    #         raise ValueError('Model not found')
-    
-    # if args.moped:
-    #     const_bnn_prior_parameters = {
-    #     "prior_mu": 0.0,
-    #     "prior_sigma": 1.0,
-    #     "posterior_mu_init": 0.0,
-    #     "posterior_rho_init": -3.0,
-    #     "type": "Reparameterization",  # Flipout or Reparameterization
-    #     "moped_enable": True,  # initialize mu/sigma from the dnn weights
-    #     "moped_delta": 0.2,
-    #     }
-        
-    #     model.load_state_dict(torch.load(args.weight))
-    #     dnn_to_bnn(model, const_bnn_prior_parameters)
-        
-    #     args.type = 'uni'
-        
-    # elif args.multi_moped:
-        
-    #     args.type = 'multi'
-    
-    # if args.distill or args.martern:
-    #     args.type = 'multi'
         
     # Check the number of parameters
     logger.info(f"Total number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
