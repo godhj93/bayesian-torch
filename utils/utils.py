@@ -235,6 +235,8 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             acc_train = correct / total
             pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc_train:.3f}, NLL: {np.mean(nlls):.3f}, LR: {optimizer.param_groups[0]['lr']:.5f}", 'blue'))
 
+            writer.add_scalar('Learning Rate', optimizer.param_groups[0]['lr'], batch_idx + e * len(train_loader))
+            
         acc_test, nll_test = test_DNN(model, test_loader)
         logger.info(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}")
         
@@ -249,6 +251,8 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             writer.add_scalar('Train/loss/NLL', np.mean(nlls), e)
             writer.add_scalar('Test/accuracy', acc_test, e)
             writer.add_scalar('Test/loss/NLL', np.mean(nll_test), e)
+        
+        
         
         if best_loss > nll_test:
             best_loss = nll_test
@@ -351,6 +355,17 @@ def get_model(args, logger, distill=False):
         elif args.model == 'wrn10-2':
             model = wrn10_2()
             
+        elif args.model == 'wrn16-4':
+            model = wrn16_4()
+            
+        elif args.model == 'wrn16-2':
+            model = wrn16_2()
+        
+        elif args.model == 'wrn22-4':
+            model = wrn22_4()
+            
+        elif args.model == 'wrn22-2':
+            model = wrn22_2()
             
         elif args.model == 'densenet30':
             model = densenet_bc_30()
@@ -377,8 +392,11 @@ def get_model(args, logger, distill=False):
         else:
             raise ValueError('Model not found')
         
+    else:
+        raise NotImplementedError("Not implemented yet")
+    
     # Check the number of parameters
-    logger.info(f"Total number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+    print(f"Total number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
     
     if torch.cuda.device_count() > 1 and args.multi_gpu:      
         device = 'cuda'  
@@ -420,6 +438,10 @@ def get_model(args, logger, distill=False):
             if args.type =='dnn':
                 model.base_model.fc = torch.nn.Linear(512, 100)
                 
+        elif args.model == 'resnet20':
+            
+            if args.type == 'dnn':
+                model.linear = torch.nn.Linear(64, 100)
         
         else:
             
@@ -493,7 +515,7 @@ def get_dataset(args, logger):
     
     elif args.data == 'cifar100':
         
-        img_size = 224
+        img_size = 32
         logger.info(colored(f"CIFAR-100 dataset is loaded, Size: {img_size}x{img_size}", 'green'))
         
         transform_train = transforms.Compose([
