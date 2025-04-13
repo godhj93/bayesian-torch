@@ -114,7 +114,7 @@ def test_ood_detection_bnn(model, in_loader, out_loader, mc_runs=30, n_bins=15, 
         # ──────────────────────────────────────────────
         # In-Distribution 처리
         # ──────────────────────────────────────────────
-        for images, y in tqdm(in_loader, desc='In-distribution'):
+        for images, y in tqdm(in_loader, desc=f'In-distribution: {args.in_data}'):
             images = images.cuda()
             mc_outputs = []
             for _ in range(mc_runs):
@@ -148,7 +148,7 @@ def test_ood_detection_bnn(model, in_loader, out_loader, mc_runs=30, n_bins=15, 
         # ──────────────────────────────────────────────
         # Out-of-Distribution 처리
         # ──────────────────────────────────────────────
-        for images, _ in tqdm(out_loader, desc='Out-of-distribution'):
+        for images, _ in tqdm(out_loader, desc=f'Out-of-distribution: {args.data}'):
             images = images.cuda()
             mc_outputs = []
             for _ in range(mc_runs):
@@ -177,7 +177,7 @@ def test_ood_detection_bnn(model, in_loader, out_loader, mc_runs=30, n_bins=15, 
                 torch.tensor(all_preds),
                 torch.tensor(all_labels),
             )
-    
+    print(f"ECE: {ece:.4f}")
     # ──────────────────────────────────────────────────────
     # OOD 검출용 AUROC (MSP/Entropy/MI) + ECE subplot
     # ──────────────────────────────────────────────────────
@@ -296,6 +296,7 @@ def main(args):
     print(colored(f"Pretrained weight is loaded from {args.weight}", 'green'))
     
     _, test_loader = get_dataset(args = args, logger = logger)
+    args.in_data = args.data
     
     if args.type == 'dnn':
         # ──────────────────────────────────────────────
@@ -320,23 +321,39 @@ def main(args):
         
         # ──────────────────────────────────────────────
         # ID Evaluation
-        # ──────────────────────────────────────────────
+        # ──────────────────────────────────────────────            
         acc, nll, kld = test_BNN(model = model, test_loader = test_loader, bs = 128, device = device, mc_runs = args.mc_runs, args = args)
-        
+        print(f"Dataset: {args.data}")
         print(colored(f"Acc: {acc:.4f}, NLL: {nll:.4f}, KLD: {kld:.4f}", 'blue'))
 
         # ──────────────────────────────────────────────
         # OOD Evaluation
         # Predictive Entropy(Total Uncertainty) = Model Uncertainty(Mutual Information) + Input Uncertainty(Expected Uncertainty)
-        #! In MODEP Paper, they used the "predictive entropy" and "mutual information" for OOD detection
+        #! In MOPED Paper, they used the "predictive entropy" and "mutual information" for OOD detection
         # ──────────────────────────────────────────────
-        args.data = 'svhn'
-        _, svhn_loader = get_dataset(args, logger = logger)
-        test_ood_detection_bnn(model, test_loader, svhn_loader, mc_runs=args.mc_runs)
+        if args.data == 'cifar10': 
+            args.data = 'svhn'
+            
+        elif args.data == 'svhn': 
+            args.data = 'cifar10'
+            
+        else: raise NotImplementedError("Not implemented yet")
         
-        args.data = 'tinyimagenet'
-        _, tiny_imagenet_loader = get_dataset(args, logger = logger)
-        test_ood_detection_bnn(model, test_loader, tiny_imagenet_loader, mc_runs=args.mc_runs)
+        print(f"Dataset: {args.data}")
+        _, out_data_loader = get_dataset(args, logger = logger)
+        test_ood_detection_bnn(model, test_loader, out_data_loader, mc_runs=args.mc_runs, args = args)
+        
+        if args.data == 'cifar10':
+            args.data = 'tinyimagenet'
+            
+        elif args.data == 'svhn' :
+            args.data = 'tinyimagenet'
+            
+        else: raise NotImplementedError("Not implemented yet")
+        
+        print(f"Dataset: {args.data}")
+        _, out_data_loader = get_dataset(args, logger = logger)
+        test_ood_detection_bnn(model, test_loader, out_data_loader, mc_runs=args.mc_runs, args = args)
 
     else:
         
