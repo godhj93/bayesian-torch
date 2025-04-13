@@ -27,7 +27,7 @@ def test_ood_detection_dnn(model, in_loader, out_loader, n_bins=15, args=None):
         # ──────────────────────────────────────────────
         # In-Distribution 처리
         # ──────────────────────────────────────────────
-        for images, y in tqdm(in_loader, desc='In-distribution'):
+        for images, y in tqdm(in_loader, desc=f'In-distribution: {args.in_data}'):
             images = images.cuda()
             output = model(images)  # 단일 forward pass
             probs = F.softmax(output, dim=1)  # softmax 확률 계산
@@ -50,7 +50,7 @@ def test_ood_detection_dnn(model, in_loader, out_loader, n_bins=15, args=None):
         # ──────────────────────────────────────────────
         # Out-of-Distribution 처리
         # ──────────────────────────────────────────────
-        for images, _ in tqdm(out_loader, desc='Out-of-distribution'):
+        for images, _ in tqdm(out_loader, desc=f'Out-of-distribution: {args.data}'):
             images = images.cuda()
             output = model(images)
             probs = F.softmax(output, dim=1)
@@ -309,13 +309,26 @@ def main(args):
         # ──────────────────────────────────────────────
         # OOD Evaluation
         # ──────────────────────────────────────────────
-        args.data = 'svhn'
-        _, svhn_loader = get_dataset(args, logger = logger)
-        test_ood_detection_dnn(model, test_loader, svhn_loader)
+        if args.data == 'cifar10': 
+            args.data = 'svhn'
+            
+        elif args.data == 'svhn': 
+            args.data = 'cifar10'
+            
+        else: raise NotImplementedError("Not implemented yet")
+        _, out_data_loader = get_dataset(args, logger = logger)
+        test_ood_detection_dnn(model, test_loader, out_data_loader, args = args)
         
-        args.data = 'tinyimagenet'
-        _, tiny_imagenet_loader = get_dataset(args, logger = logger)
-        test_ood_detection_dnn(model, test_loader, tiny_imagenet_loader)
+        if args.data == 'cifar10':
+            args.data = 'tinyimagenet'
+            
+        elif args.data == 'svhn' :
+            args.data = 'tinyimagenet'
+            
+        else: raise NotImplementedError("Not implemented yet")
+        
+        _, out_data_loader = get_dataset(args, logger = logger)
+        test_ood_detection_dnn(model, test_loader, out_data_loader, args = args)
             
     elif args.type == 'uni':
         
