@@ -458,6 +458,13 @@ def get_model(args, logger, distill=False):
             
             if args.type == 'dnn':
                 model.base_model.fc = torch.nn.Linear(512, 200)
+        
+        elif args.model == 'wrn22-4':
+            if args.type == 'dnn':
+                model.fc = torch.nn.Linear(256, 200)
+                
+        else:
+            raise NotImplementedError("Not implemented yet")
     
     elif args.data == 'svhn':
         pass
@@ -539,7 +546,7 @@ def get_dataset(args, logger):
         
     elif args.data == 'tinyimagenet':
         
-        img_size = 224
+        img_size = 64
         logger.info(colored(f"Tiny ImageNet dataset is loaded, Size: {img_size}x{img_size}", 'green'))
         
         transform_train = transforms.Compose([
