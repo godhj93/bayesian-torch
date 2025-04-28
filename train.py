@@ -119,6 +119,7 @@ def main(args):
         args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 200], gamma=0.1)
     else:
         args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100000], gamma=0.1) # We don't want to change the learning rate schedule for now.
+        
     log_params = {
         'data': args.data,
         'model': args.model,
