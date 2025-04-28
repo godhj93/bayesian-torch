@@ -4,6 +4,8 @@ from torch.distributions import LowRankMultivariateNormal
 from torch.optim import Adam
 import torch.nn as nn
 from bayesian_torch.layers.variational_layers.conv_variational import Conv2dReparameterization, Conv2dReparameterization_Multivariate
+from bayesian_torch.layers.variational_layers.linear_variational import LinearReparameterization
+
 import numpy as np
 import copy 
 from torch.nn import functional as F
@@ -154,12 +156,11 @@ def get_conv_layers(model):
     
     return conv_layers
 
-
 def get_linear_layers(model):
     linear_layers = []
-    
+    linear_types = (nn.Linear, LinearReparameterization)
     def find_linear_layers(module):
-        if isinstance(module, nn.Linear):
+        if isinstance(module, linear_types):
             linear_layers.append(module)
         for child in module.children():
             find_linear_layers(child)

@@ -18,11 +18,14 @@ from utils.models.lenet_dnn import LeNet5_dnn
 from utils.models.lenet_uni import LeNet5_uni
 from utils.models.resnet18_dnn import ResNet18_dnn
 from utils.models.resnet18_uni import ResNet18_uni
+from utils.models.vit_tiny_dnn import ViT_Tiny_dnn
+from utils.models.vit_tiny_uni import ViT_Tiny_uni
 from utils.models.wideresnet_dnn import *
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
 from bayesian_torch.layers.variational_layers.conv_variational import Conv2dReparameterization, Conv2dReparameterization_Multivariate
+from bayesian_torch.layers.variational_layers.linear_variational import LinearReparameterization
 
 # Dataset
 from torchvision import datasets, transforms
@@ -95,7 +98,8 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
             pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):,}", 'blue'))
             
-
+        args.scheduler.step()
+        
         acc_test, nll, kl = test_BNN(model = model, test_loader = test_loader, bs = bs, mc_runs = mc_runs, device = device, args = args)
         logger.info(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}")
         
@@ -237,6 +241,8 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
 
             writer.add_scalar('Learning Rate', optimizer.param_groups[0]['lr'], batch_idx + e * len(train_loader))
             
+        args.scheduler.step()
+        
         acc_test, nll_test = test_DNN(model, test_loader)
         logger.info(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}")
         
@@ -372,7 +378,10 @@ def get_model(args, logger, distill=False):
             
         elif args.model == 'mobilenetv2':
             model = MobileNetV2_dnn(num_classes=10, width_mult=1.0)
-            
+        
+        elif args.model == 'vit-tiny':
+            model = ViT_Tiny_dnn(num_classes=10)
+
         else:
             raise ValueError('Model not found')
         
@@ -389,6 +398,10 @@ def get_model(args, logger, distill=False):
             
         elif args.model == 'mobilenetv2':
             model = MobileNetV2_uni()
+            
+        elif args.model == 'vit-tiny': 
+            model = ViT_Tiny_uni(num_classes=10)
+            
         else:
             raise ValueError('Model not found')
         
@@ -443,6 +456,17 @@ def get_model(args, logger, distill=False):
             if args.type == 'dnn':
                 model.linear = torch.nn.Linear(64, 100)
         
+            if args.type == 'uni':
+                model.linear = LinearReparameterization(64, 100)
+                
+        elif args.model == 'vit-tiny':
+              model.head = torch.nn.Linear(model.head.in_features, 100, bias=True)
+
+        elif args.model == 'densenet30':
+            
+            if args.type == 'dnn':
+                model.classifier = torch.nn.Linear(model.classifier.in_features, 100, bias = True)
+        
         else:
             
             raise NotImplementedError("Not implemented yet")
@@ -462,6 +486,11 @@ def get_model(args, logger, distill=False):
         elif args.model == 'wrn22-4':
             if args.type == 'dnn':
                 model.fc = torch.nn.Linear(256, 200)
+        
+        elif args.model == 'vit-tiny':
+            if args.type == 'dnn':
+                model.head = torch.nn.Linear(model.head.in_features, 200, bias=True)
+        
                 
         else:
             raise NotImplementedError("Not implemented yet")

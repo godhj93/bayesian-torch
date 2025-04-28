@@ -88,6 +88,7 @@ def main(args):
 
     model = get_model(args = args, logger = logger)
 
+    logging.info(f"The number of parameters in the model: {sum(p.numel() for p in model.parameters()):,}")
     # Optimizer
     if args.optimizer == 'sgd':
         
@@ -99,6 +100,12 @@ def main(args):
         args.momentum = None
         args.nesterov = None
         args.weight_decay = None
+        
+    # if args.model == 'vit-tiny':
+    #     optim = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    #     args.momentum = None
+    #     args.nesterov = None
+    #     logging.info(colored(f"Optimizer is set to AdamW for ViT", 'green'))
     
     else:
         raise ValueError(f"Unsupported optimizer: {args.optimizer}")        
@@ -107,6 +114,11 @@ def main(args):
         
     logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
     
+    if args.data == 'cifar100':
+        # Multi Step Learning rate Schedule
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 200], gamma=0.1)
+    else:
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100000], gamma=0.1) # We don't want to change the learning rate schedule for now.
     log_params = {
         'data': args.data,
         'model': args.model,
@@ -165,7 +177,7 @@ def main(args):
 
                 # Pruning step
                 prune_model(model, sparsity=i/100.0, logger=logger)
-                
+                args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 200], gamma=0.1)
                 # Training
                 if train_DNN(epoch=args.epochs, 
                         model=model, 

@@ -1,7 +1,7 @@
 import torch
 import torch.optim as optim
 from utils.utils import get_dataset, get_model, test_DNN, test_BNN, train_BNN
-from distill import get_conv_layers
+from distill import get_conv_layers, get_linear_layers
 import argparse
 from termcolor import colored
 import copy
@@ -57,6 +57,16 @@ def main(args):
         
     logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
     
+    if args.data == 'cifar100':
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 200], gamma=0.1)
+        args.epochs = 300
+        args.lr = 1e-1
+        optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+        print(colored(f"Scheduler: MultiStepLR, Milestones: [100, 200], Gamma: 0.1", 'red'))
+        print(colored(f"Epochs: {args.epochs}", 'red'))
+        print(colored(f"Optim: SGD, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'red'))
+        
+        
     log_params = {
         'data': args.data,
         'model': args.model,
@@ -73,7 +83,7 @@ def main(args):
         'moped': args.MOPED,
         'timestamp': date,
         'sparsity': sparsity,
-
+        'std': args.std
     }
 
     params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type']])
@@ -98,6 +108,7 @@ def main(args):
     logger.info(colored("Testing DNN", 'green'))
     logger.info(colored(f"Sparsity: {sparsity*100:.2f}%, Acc: {acc:.2f}%, Loss: {loss:.4f}", 'green'))
     
+    # Set the prior for the convolutional layers
     dnn_conv_layers = get_conv_layers(dnn)
     bnn_conv_layers = get_conv_layers(bnn)
 
@@ -108,11 +119,32 @@ def main(args):
         if args.MOPED: 
             std = torch.where(mu == 0 , torch.ones_like(mu), torch.ones_like(mu))
         else:
-            std = torch.where(mu == 0 , torch.ones_like(mu), torch.ones_like(mu) * 1e-3)
+            std = torch.where(mu == 0 , torch.ones_like(mu), torch.ones_like(mu) * args.std)
             
         bnn_layer.prior_weight_mu = mu
         bnn_layer.prior_weight_sigma = std
 
+        logging.info(colored(f"Setting a Layer: {dnn_layer}", 'yellow'))
+        
+    # Set the prior for the linear layers
+    dnn_linear_layer = get_linear_layers(dnn)
+    bnn_linear_layer = get_linear_layers(bnn)
+    print(colored(f"Number of Linear Layers: {len(dnn_linear_layer)}", 'red'))
+    print(colored(f"Number of Linear Layers: {len(bnn_linear_layer)}", 'red'))
+    for dnn_layer, bnn_layer in zip(dnn_linear_layer, bnn_linear_layer):
+        
+        mu = dnn_layer.weight.detach().cpu().clone()
+        
+        if args.MOPED: 
+            std = torch.where(mu == 0 , torch.ones_like(mu), torch.ones_like(mu))
+        else:
+            std = torch.where(mu == 0 , torch.ones_like(mu), torch.ones_like(mu) * args.std)
+            
+        bnn_layer.prior_weight_mu = mu
+        bnn_layer.prior_weight_sigma = std
+        
+        logger.info(colored(f"Setting a Layer: {dnn_layer}", 'yellow'))
+        
     # Save the arguments
     with open(f"{log_path}/config.txt", "w") as f:
         for key, value in vars(args).items():
@@ -156,7 +188,7 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
     parser.add_argument('--nesterov', action='store_true', help='Use Nesterov')
-    
+    parser.add_argument('--std', type = float, default = 1e-3, help='Set a std for a good prior')
     args = parser.parse_args()
     
     main(args)
