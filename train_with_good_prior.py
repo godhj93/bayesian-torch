@@ -58,10 +58,11 @@ def main(args):
     logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
     
     if args.data == 'cifar100':
-        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 200], gamma=0.1)
+        
         args.epochs = 300
         args.lr = 1e-1
         optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 200], gamma=0.1)
         print(colored(f"Scheduler: MultiStepLR, Milestones: [100, 200], Gamma: 0.1", 'red'))
         print(colored(f"Epochs: {args.epochs}", 'red'))
         print(colored(f"Optim: SGD, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'red'))

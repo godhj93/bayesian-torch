@@ -466,7 +466,8 @@ def get_model(args, logger, distill=False):
             
             if args.type == 'dnn':
                 model.classifier = torch.nn.Linear(model.classifier.in_features, 100, bias = True)
-        
+            if args.type == 'uni':
+                model.classifier = LinearReparameterization(model.classifier.in_features, 100, bias = True)
         else:
             
             raise NotImplementedError("Not implemented yet")

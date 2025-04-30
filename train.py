@@ -117,6 +117,7 @@ def main(args):
     if args.data == 'cifar100':
         # Multi Step Learning rate Schedule
         args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 200], gamma=0.1)
+        args.epochs = 300
     else:
         args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100000], gamma=0.1) # We don't want to change the learning rate schedule for now.
         
