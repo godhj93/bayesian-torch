@@ -67,6 +67,9 @@ def main(args):
         print(colored(f"Epochs: {args.epochs}", 'red'))
         print(colored(f"Optim: SGD, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'red'))
         
+    else:
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[1000000000], gamma=1.0) # No scheduler
+        print(colored(f"No LR Scheduler: MultiStepLR, Milestones: [1000000000], Gamma: 1.0", 'red'))
         
     log_params = {
         'data': args.data,

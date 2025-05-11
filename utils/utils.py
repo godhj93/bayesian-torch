@@ -20,6 +20,8 @@ from utils.models.resnet18_dnn import ResNet18_dnn
 from utils.models.resnet18_uni import ResNet18_uni
 from utils.models.vit_tiny_dnn import ViT_Tiny_dnn
 from utils.models.vit_tiny_uni import ViT_Tiny_uni
+from utils.models.mlp_dnn import MLP_dnn
+from utils.models.mlp_uni import MLP_uni
 from utils.models.wideresnet_dnn import *
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
@@ -382,6 +384,9 @@ def get_model(args, logger, distill=False):
         elif args.model == 'vit-tiny':
             model = ViT_Tiny_dnn(num_classes=10)
 
+        elif args.model == 'mlp':
+            model = MLP_dnn(input_size=28*28, hidden_size=100, output_size=10)
+            
         else:
             raise ValueError('Model not found')
         
@@ -401,6 +406,9 @@ def get_model(args, logger, distill=False):
             
         elif args.model == 'vit-tiny': 
             model = ViT_Tiny_uni(num_classes=10)
+            
+        elif args.model == 'mlp':
+            model = MLP_uni(input_size=28*28, hidden_size=100, output_size=10)
             
         else:
             raise ValueError('Model not found')
@@ -427,10 +435,9 @@ def get_model(args, logger, distill=False):
     
    
         
-    if args.data == 'mnist' and args.model == 'resnet20':
-        model.conv1 = Conv2dReparameterization(1, 16, 3, 1, 1) if args.type == 'uni' else Conv2dReparameterization_Multivariate(1, 16, 3, 1, 1)
-        logger.info(colored(f"{args.type} Conv1 input channel is changed to 1", 'red'))
-    
+    if args.data == 'mnist':
+        pass
+        
     elif args.data =='cifar10':
 
         logger.info(colored(f"{args.model} will be used.", 'red'))
