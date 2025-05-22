@@ -35,7 +35,7 @@ class MLP_uni(nn.Module):
 if __name__ == "__main__":
 
     model = MLP_uni(input_size=28*28, hidden_size=100, output_size=10)
-    print("\nModel created using class structure:")
+    print("\nModel created :")
     model.eval()
     with torch.no_grad():
         x = torch.randn(1, 1, 28, 28)
