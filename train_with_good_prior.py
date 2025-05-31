@@ -57,7 +57,7 @@ def main(args):
         
     logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
     
-    if args.data == 'cifar100':
+    if args.data == 'cifar100' or args.data == 'tinyimagenet':
         
         args.epochs = 300
         args.lr = 1e-1

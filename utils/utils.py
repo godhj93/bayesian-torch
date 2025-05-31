@@ -491,14 +491,17 @@ def get_model(args, logger, distill=False):
             if args.type == 'dnn':
                 model.base_model.fc = torch.nn.Linear(512, 200)
         
-        elif args.model == 'wrn22-4':
+        elif args.model == 'resnet20':
             if args.type == 'dnn':
-                model.fc = torch.nn.Linear(256, 200)
-        
-        elif args.model == 'vit-tiny':
+                model.linear = torch.nn.Linear(64, 200)
+            elif args.type == 'uni':
+                model.linear = LinearReparameterization(64, 200)
+            
+        elif args.model == 'densenet30':
             if args.type == 'dnn':
-                model.head = torch.nn.Linear(model.head.in_features, 200, bias=True)
-        
+                model.classifier = torch.nn.Linear(model.classifier.in_features, 200, bias = True)
+            elif args.type == 'uni':
+                model.classifier = LinearReparameterization(model.classifier.in_features, 200, bias = True)
                 
         else:
             raise NotImplementedError("Not implemented yet")

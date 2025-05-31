@@ -344,29 +344,31 @@ def main(args):
         # Predictive Entropy(Total Uncertainty) = Model Uncertainty(Mutual Information) + Input Uncertainty(Expected Uncertainty)
         #! In MOPED Paper, they used the "predictive entropy" and "mutual information" for OOD detection
         # ──────────────────────────────────────────────
-        if args.data == 'cifar10' or 'cifar100': 
-            args.data = 'svhn'
+        # if args.data == 'cifar10' or 'cifar100': 
+        #     args.data = 'svhn'
             
-        elif args.data == 'svhn': 
-            args.data = 'cifar10'
+        # elif args.data == 'svhn': 
+        #     args.data = 'cifar10'
             
-        else: raise NotImplementedError("Not implemented yet")
+        # else: raise NotImplementedError("Not implemented yet")
+   
         
-        print(f"Dataset: {args.data}")
-        _, out_data_loader = get_dataset(args, logger = logger)
-        test_ood_detection_bnn(model, test_loader, out_data_loader, mc_runs=args.mc_runs, args = args)
-        
-        if args.data == 'cifar10' or 'cifar100':
-            args.data = 'tinyimagenet'
+        # if args.data == 'cifar10' or 'cifar100':
+        #     args.data = 'tinyimagenet'
             
-        elif args.data == 'svhn':
-            args.data = 'tinyimagenet'
+        # elif args.data == 'svhn':
+        #     args.data = 'tinyimagenet'
             
-        else: raise NotImplementedError("Not implemented yet")
+        # else: raise NotImplementedError("Not implemented yet")
         
-        print(f"Dataset: {args.data}")
-        _, out_data_loader = get_dataset(args, logger = logger)
-        test_ood_detection_bnn(model, test_loader, out_data_loader, mc_runs=args.mc_runs, args = args)
+        for ood in args.ood:
+            
+            args.data = ood
+            
+            print(f"Out of Distribution Dataset: {args.data}")
+            _, out_data_loader = get_dataset(args, logger = logger)
+            test_ood_detection_bnn(model, test_loader, out_data_loader, mc_runs=args.mc_runs, args = args)
+      
 
     else:
         
@@ -384,7 +386,7 @@ if __name__ == '__main__':
     parser.add_argument('--moped', action='store_true', help='Use mode posterior')
     parser.add_argument('--multi_moped', action='store_true', help='Use mode posterior')
     parser.add_argument('--multi_gpu', action='store_true', help='Use mode posterior')
-    
+    parser.add_argument('--ood', nargs='+', help='Out-of-distribution datasets')
     args = parser.parse_args()
     
     print(colored(args, 'green'))
