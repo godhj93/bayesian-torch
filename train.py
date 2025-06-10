@@ -89,8 +89,6 @@ def main(args):
     model = get_model(args = args, logger = logger)
 
     logging.info(f"The number of parameters in the model: {sum(p.numel() for p in model.parameters()):,}")
-    # Optimizer
-    
     
     if args.data == 'cifar100' or args.data == 'tinyimagenet':
         # Multi Step Learning rate Schedule
@@ -181,7 +179,12 @@ def main(args):
 
                 # Pruning step
                 prune_model(model, sparsity=i/100.0, logger=logger)
-                optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+                if args.optimizer == 'adam':
+                    optim = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+                    args.momentum = None
+                    args.nesterov = None
+                else:
+                    optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
                 args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 200], gamma=0.1)
                 # Training
                 if train_DNN(epoch=args.epochs, 
