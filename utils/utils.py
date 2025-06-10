@@ -23,6 +23,7 @@ from utils.models.vit_tiny_uni import ViT_Tiny_uni
 from utils.models.mlp_dnn import MLP_dnn
 from utils.models.mlp_uni import MLP_uni
 from utils.models.wideresnet_dnn import *
+from utils.models.basic_rnn import RNN_dnn
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
@@ -62,7 +63,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
         
         pbar = tqdm(enumerate(train_loader))
         for batch_idx, (data, target) in pbar:
-
+    
             data, target = data.to(device), target.to(device)
             outputs =[]
             kls = []
@@ -224,10 +225,16 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
     for e in range(epoch):
         
         pbar = tqdm(enumerate(train_loader), total=len(train_loader), ncols=0)
-
-        for batch_idx, (data, target) in pbar:
+        model.train()
+        # for batch_idx, (data, target) in pbar:
+        for batch_idx, batch_data in pbar:
             
-            data, target = data.to(device), target.to(device)
+            if args.model == 'basic_rnn':
+                data, target = batch_data["input_ids"].to(device), batch_data["label"].to(device)
+            else:
+                data, target = batch_data[0], batch_data[1]
+                data, target = data.to(device).squeeze(1), target.to(device)
+                
             optimizer.zero_grad()
             output = model(data)
             _, predicted = torch.max(output.data, 1)
@@ -245,7 +252,7 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
             
         args.scheduler.step()
         
-        acc_test, nll_test = test_DNN(model, test_loader)
+        acc_test, nll_test = test_DNN(model, test_loader, device, args)
         logger.info(f"[Test] Acc: {acc_test:.3f}, NLL: {nll_test:.3f}")
         
         if args.prune:
@@ -308,7 +315,7 @@ def train_DNN(epoch, model, train_loader, test_loader, optimizer, device, writer
     # print(colored(f"Best model returned", 'green'))
     
     
-def test_DNN(model, test_loader):
+def test_DNN(model, test_loader, device, args):
 
     model.cuda()
     model.eval()
@@ -316,14 +323,24 @@ def test_DNN(model, test_loader):
     total = 0
     nlls = []
     with torch.no_grad():
-        for data, target in test_loader:
-            data, target = data.cuda(), target.cuda()
+        
+        # for data, target in test_loader:
+        for batch_data in test_loader:
+            
+            if args.model == 'basic_rnn':
+                data, target = batch_data["input_ids"].to(device), batch_data["label"].to(device)
+                
+            else:
+                data, target = batch_data[0], batch_data[1]
+                data, target = data.to(device).squeeze(1), target.to(device)
+                
             output = model(data)
             _, predicted = torch.max(output.data, 1)
             loss = F.cross_entropy(output, target)
             total += target.size(0)
             correct += (predicted == target).sum().item()
             nlls.append(loss.item())
+            
     return correct / total, np.mean(nlls)
 
 
@@ -387,6 +404,9 @@ def get_model(args, logger, distill=False):
         elif args.model == 'mlp':
             model = MLP_dnn(input_size=28*28, hidden_size=100, output_size=10)
             
+        elif args.model == 'basic_rnn':
+            model = RNN_dnn(vocab_size=30522) # vocab_size from ag_news dataset
+            
         else:
             raise ValueError('Model not found')
         
@@ -414,7 +434,7 @@ def get_model(args, logger, distill=False):
             raise ValueError('Model not found')
         
     else:
-        raise NotImplementedError("Not implemented yet")
+        raise NotImplementedError("Model Parsing: Not implemented yet")
     
     # Check the number of parameters
     print(f"Total number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
@@ -509,8 +529,11 @@ def get_model(args, logger, distill=False):
     elif args.data == 'svhn':
         pass
 
+    elif args.data == 'ag_news':
+        pass
+    
     else:
-        raise NotImplementedError("Not implemented yet")
+        raise NotImplementedError("Data Parsing: Not implemented yet")
     
     return model
 
@@ -631,6 +654,24 @@ def get_dataset(args, logger):
         
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
+        
+    elif args.data == 'ag_news':
+        from transformers import AutoTokenizer
+        from datasets import load_dataset
+        MAX_LENGTH = 50
+        tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+        dataset = load_dataset("ag_news")
+
+        def tokenize(example):
+            return tokenizer(example["text"], padding="max_length", truncation=True, max_length=MAX_LENGTH)
+
+        dataset = dataset.map(tokenize)
+        dataset.set_format(type="torch", columns=["input_ids", "label"])
+        transform_train = None
+        transform_test = None
+        
+        train_loader = torch.utils.data.DataLoader(dataset["train"], batch_size=args.bs, shuffle=True)
+        test_loader = torch.utils.data.DataLoader(dataset["test"], batch_size=args.bs)
         
     else:
         raise ValueError('Dataset not found')
