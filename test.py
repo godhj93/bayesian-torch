@@ -309,26 +309,35 @@ def main(args):
         # ──────────────────────────────────────────────
         # OOD Evaluation
         # ──────────────────────────────────────────────
-        if args.data == 'cifar10' or 'cifar100': 
-            args.data = 'svhn'
-            
-        elif args.data == 'svhn': 
-            args.data = 'cifar10'
-            
-        else: raise NotImplementedError("Not implemented yet")
-        _, out_data_loader = get_dataset(args, logger = logger)
-        test_ood_detection_dnn(model, test_loader, out_data_loader, args = args)
         
-        if args.data == 'cifar10' or 'cifar100':
-            args.data = 'tinyimagenet'
+        for ood in args.ood:
             
-        elif args.data == 'svhn' :
-            args.data = 'tinyimagenet'
+            args.data = ood
             
-        else: raise NotImplementedError("Not implemented yet")
+            print(f"Out of Distribution Dataset: {args.data}")
+            _, out_data_loader = get_dataset(args, logger = logger)
+            test_ood_detection_dnn(model, test_loader, out_data_loader, args = args)
+      
+        # if args.data == 'cifar10' or 'cifar100': 
+        #     args.data = 'svhn'
+            
+        # elif args.data == 'svhn': 
+        #     args.data = 'cifar10'
+            
+        # else: raise NotImplementedError("Not implemented yet")
+        # _, out_data_loader = get_dataset(args, logger = logger)
+        # test_ood_detection_dnn(model, test_loader, out_data_loader, args = args)
         
-        _, out_data_loader = get_dataset(args, logger = logger)
-        test_ood_detection_dnn(model, test_loader, out_data_loader, args = args)
+        # if args.data == 'cifar10' or 'cifar100':
+        #     args.data = 'tinyimagenet'
+            
+        # elif args.data == 'svhn' :
+        #     args.data = 'tinyimagenet'
+            
+        # else: raise NotImplementedError("Not implemented yet")
+        
+        # _, out_data_loader = get_dataset(args, logger = logger)
+        # test_ood_detection_dnn(model, test_loader, out_data_loader, args = args)
             
     elif args.type == 'uni':
         
