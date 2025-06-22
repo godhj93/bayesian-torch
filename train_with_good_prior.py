@@ -57,7 +57,7 @@ def main(args):
         
     logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
     
-    if args.data == 'cifar100' or args.data == 'tinyimagenet':
+    if args.data == 'cifar100' or args.data == 'tinyimagenet' or args.data == 'imagenet':
         
         args.epochs = 300
         args.lr = 1e-1
@@ -108,7 +108,7 @@ def main(args):
 
     # bnn = get_model(args = args, logger = logger)
 
-    acc, loss = test_DNN(dnn, test_loader)
+    acc, loss = test_DNN(dnn, test_loader, device, args)
     logger.info(colored("Testing DNN", 'green'))
     logger.info(colored(f"Sparsity: {sparsity*100:.2f}%, Acc: {acc:.2f}%, Loss: {loss:.4f}", 'green'))
     

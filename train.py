@@ -90,7 +90,7 @@ def main(args):
 
     logging.info(f"The number of parameters in the model: {sum(p.numel() for p in model.parameters()):,}")
     
-    if args.data == 'cifar100' or args.data == 'tinyimagenet':
+    if args.data == 'cifar100' or args.data == 'tinyimagenet' or args.data == 'imagenet':
         # Multi Step Learning rate Schedule
         args.lr = 1e-1
         args.epochs = 300
@@ -165,7 +165,7 @@ def main(args):
 
         if args.prune:
             model.load_state_dict(torch.load(args.weight))
-            args.best_acc, args.best_nll = test_DNN(model, test_loader)
+            args.best_acc, args.best_nll = test_DNN(model, test_loader, device, args)
             logger.info(colored(f"Test accuracy of DNN: {args.best_acc:.4f}, Test NLL: {args.best_nll:.4f}", 'green'))
             
             save_path = os.path.join(writer.log_dir, f'original_model.pth')

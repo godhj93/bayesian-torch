@@ -16,14 +16,16 @@ from utils.models.vgg_dnn import VGG7
 from utils.models.vgg_uni import VGG7_uni
 from utils.models.lenet_dnn import LeNet5_dnn
 from utils.models.lenet_uni import LeNet5_uni
-from utils.models.resnet18_dnn import ResNet18_dnn
-from utils.models.resnet18_uni import ResNet18_uni
+# from utils.models.resnet18_dnn import ResNet18_dnn
+from bayesian_torch.models.deterministic.resnet_large import resnet18 as ResNet18_dnn
+from bayesian_torch.models.bayesian.resnet_variational_large import resnet18 as ResNet18_uni
 from utils.models.vit_tiny_dnn import ViT_Tiny_dnn
 from utils.models.vit_tiny_uni import ViT_Tiny_uni
 from utils.models.mlp_dnn import MLP_dnn
 from utils.models.mlp_uni import MLP_uni
 from utils.models.wideresnet_dnn import *
 from utils.models.basic_rnn import RNN_dnn
+from utils.models.basic_rnn_uni import RNN_uni
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
@@ -372,7 +374,10 @@ def get_model(args, logger, distill=False):
             model = resnet20_deterministic()
 
         elif args.model == 'resnet18':
-            model = ResNet18_dnn()
+            if args.data == 'imagenet':
+                model = ResNet18_dnn(num_classes=1000, pretrained=True)
+            # else:
+                # model = ResNet18_dnn(num_classes=100, pretrained=False)
             
         elif args.model == 'wrn10-1':
             model = wrn10_1()
@@ -429,6 +434,9 @@ def get_model(args, logger, distill=False):
             
         elif args.model == 'mlp':
             model = MLP_uni(input_size=28*28, hidden_size=100, output_size=10)
+        
+        elif args.model == 'basic_rnn':
+            model = RNN_uni(vocab_size=30522)
             
         else:
             raise ValueError('Model not found')
@@ -525,6 +533,13 @@ def get_model(args, logger, distill=False):
                 
         else:
             raise NotImplementedError("Not implemented yet")
+    
+    elif args.data == 'imagenet':
+        
+        if args.model == 'resnet18':
+            # model.base_model.fc = torch.nn.Linear(512, 1000)
+            print(model)
+            
     
     elif args.data == 'svhn':
         pass
@@ -633,6 +648,42 @@ def get_dataset(args, logger):
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
          
+    elif args.data == 'imagenet':
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+        traindir = os.path.join('imagenet', 'train')
+        valdir = os.path.join('imagenet', 'val')
+        
+        transform_train = transforms.Compose([
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ])
+        
+        transform_test = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize,
+            ])
+        
+        train_dataset = datasets.ImageFolder(
+            traindir,
+            transform=transform_train)
+
+        val_dataset = datasets.ImageFolder(
+            valdir,
+            transform=transform_test
+            )
+        
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=args.bs, shuffle=True,
+            num_workers=4, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(
+            val_dataset, batch_size=args.bs, shuffle=False,
+            num_workers=4, pin_memory=True)
+        
     elif args.data == 'svhn':
         
         logger.info(colored(f"SVHN dataset is loaded", 'green'))

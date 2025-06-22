@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-class RNN_dnn(nn.Module):
-    def __init__(self, vocab_size, emb_dim=10, hidden_dim=128*2, lstm_layers=1, output_dim=4):
+from bayesian_torch.layers.variational_layers.rnn_variational import LSTMReparameterization
+class RNN_uni(nn.Module):
+    def __init__(self, vocab_size, emb_dim=10, hidden_dim=32, lstm_layers=1, output_dim=4):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, emb_dim, padding_idx=0)
         self.lstm = nn.LSTM(
@@ -29,7 +29,7 @@ class RNN_dnn(nn.Module):
 
 if __name__ == "__main__":
     # Example usage
-    model = RNN_dnn(vocab_size=10000, emb_dim=300, hidden_dim=512, lstm_layers=1, output_dim=4)
+    model = RNN_uni(vocab_size=10000, emb_dim=300, hidden_dim=512, lstm_layers=1, output_dim=4)
     print(model)
     print(f"Model parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
     # Dummy input
