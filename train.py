@@ -90,9 +90,11 @@ def main(args):
 
     logging.info(f"The number of parameters in the model: {sum(p.numel() for p in model.parameters()):,}")
     
-    if args.data == 'cifar100' or args.data == 'tinyimagenet' or args.data == 'cifar10':
-        # Multi Step Learning rate Schedule
-        args.lr = 1e-1
+    if args.data == 'cifar100' or args.data == 'tinyimagenet':
+        
+        if not args.prune:
+            args.lr = 1e-1
+
         args.epochs = 300
         if args.optimizer == 'adam':
             optim = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -102,9 +104,11 @@ def main(args):
             optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
         args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[110, 220], gamma=0.1)
         
-    elif args.data == 'imagenet':
+    elif args.data == 'imagenet' or args.data == 'cifar10' :
         # Multi Step Learning rate Schedule
-        args.lr = 1e-1
+        if not args.prune:
+            args.lr = 1e-1
+        
         args.epochs = 90
         if args.optimizer == 'adam':
             optim = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -163,7 +167,7 @@ def main(args):
         'epochs': args.epochs,
         'moped': args.moped,
         'timestamp': date,
-        'name': args.scale,
+        'scale': args.scale,
     }
 
     params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type', 'scale']])

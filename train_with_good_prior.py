@@ -67,7 +67,7 @@ def main(args):
         print(colored(f"Epochs: {args.epochs}", 'red'))
         print(colored(f"Optim: SGD, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'red'))
         
-    elif args.data == 'imagenet':
+    elif args.data == 'imagenet' or args.data == 'cifar10':
         # Multi Step Learning rate Schedule
         args.lr = 1e-1
         args.epochs = 90
@@ -100,10 +100,10 @@ def main(args):
         'timestamp': date,
         'sparsity': sparsity,
         'std': args.std,
-        'name': args.name
+        'scale': args.scale
     }
 
-    params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type', 'name']])
+    params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type', 'scale']])
     
     log_path = f"runs/{log_params['data']}/{log_params['model']}/{log_params['date']}/{log_params['type']}/{log_params['sparsity']}/{params_str}"
         
@@ -206,7 +206,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
     parser.add_argument('--nesterov', action='store_true', help='Use Nesterov')
     parser.add_argument('--std', type = float, default = 1e-3, help='Set a std for a good prior')
-    parser.add_argument('--name', type=str, default='', help='Name of the run for logging')
+    parser.add_argument('--scale', type=str, default='', help='KLD scale')
     args = parser.parse_args()
     
     main(args)
