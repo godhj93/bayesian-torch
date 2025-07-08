@@ -52,7 +52,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     best_acc = 0
     
     early_stopping = EarlyStopping(patience=100, min_delta=0.0)
-
+    
     for e in range(epoch):
         if args.train_sampler:
             args.train_sampler.set_epoch(e)            
@@ -65,6 +65,12 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
         
         pbar = tqdm(enumerate(train_loader))
         N = len(train_loader.dataset)
+        
+        if args.scale == 'N':
+            scaling = N
+        else:
+            scaling = bs
+            
         for batch_idx, (data, target) in pbar:
     
             data, target = data.to(device), target.to(device)
@@ -88,7 +94,6 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             _, predicted = torch.max(output.data, 1)
             
             nll = F.cross_entropy(output, target)
-            scaling = bs
             
             loss = nll * (1/args.t) + kl_loss / scaling #N # args.t: Cold posterior temperature
             # loss = nll
@@ -177,8 +182,14 @@ def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
     total = 0
     nll_total = []
     kl_total = []
-    
     mc_runs = 30
+    
+    N = len(test_loader.dataset)
+    if args.scale == 'N':
+        scaling = N
+    else:
+        scaling = bs
+        
     with torch.no_grad():
         
         for data, target in tqdm(test_loader, desc=f'Testing [MC_runs={mc_runs}]'):
@@ -205,7 +216,7 @@ def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
             nll = F.cross_entropy(output, target) 
             
             nll_total.append(nll.item())
-            kl_total.append(kl.item() / bs)
+            kl_total.append(kl.item() / scaling)
             
             total += target.size(0)
             correct += (predicted == target).sum().item()

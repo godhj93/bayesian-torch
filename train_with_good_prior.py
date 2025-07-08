@@ -99,10 +99,11 @@ def main(args):
         'moped': args.MOPED,
         'timestamp': date,
         'sparsity': sparsity,
-        'std': args.std
+        'std': args.std,
+        'name': args.name
     }
 
-    params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type']])
+    params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type', 'name']])
     
     log_path = f"runs/{log_params['data']}/{log_params['model']}/{log_params['date']}/{log_params['type']}/{log_params['sparsity']}/{params_str}"
         
@@ -205,6 +206,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
     parser.add_argument('--nesterov', action='store_true', help='Use Nesterov')
     parser.add_argument('--std', type = float, default = 1e-3, help='Set a std for a good prior')
+    parser.add_argument('--name', type=str, default='', help='Name of the run for logging')
     args = parser.parse_args()
     
     main(args)

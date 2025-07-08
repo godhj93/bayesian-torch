@@ -90,7 +90,7 @@ def main(args):
 
     logging.info(f"The number of parameters in the model: {sum(p.numel() for p in model.parameters()):,}")
     
-    if args.data == 'cifar100' or args.data == 'tinyimagenet':
+    if args.data == 'cifar100' or args.data == 'tinyimagenet' or args.data == 'cifar10':
         # Multi Step Learning rate Schedule
         args.lr = 1e-1
         args.epochs = 300
@@ -162,10 +162,11 @@ def main(args):
         'mc_runs': args.mc_runs,
         'epochs': args.epochs,
         'moped': args.moped,
-        'timestamp': date
+        'timestamp': date,
+        'name': args.scale,
     }
 
-    params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type']])
+    params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type', 'scale']])
     
     log_path = f"runs/{log_params['data']}/{log_params['model']}/{log_params['date']}/{log_params['type']}/{params_str}"
     
@@ -272,6 +273,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
     parser.add_argument('--nesterov', action='store_true', help='Use Nesterov')
     parser.add_argument('--std', type = float, default = 1e-3, help='Set a std for a good prior')
+    parser.add_argument('--scale', type=str, default='N', help='KLD scale [N, BS]')
     args = parser.parse_args()
     
     print(colored(args, 'blue'))
