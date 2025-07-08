@@ -105,7 +105,7 @@ def main(args):
 
     params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type', 'scale']])
     
-    log_path = f"runs/{log_params['data']}/{log_params['model']}/{log_params['date']}/{log_params['type']}/{log_params['sparsity']}/{params_str}"
+    log_path = f"runs/{log_params['data']}/{log_params['model']}/{log_params['date']}/{log_params['type']}/{log_params['std']}/{log_params['sparsity']}/{params_str}"
         
     writer = SummaryWriter(log_path)
 
