@@ -303,7 +303,7 @@ def main(args):
         # ID Evaluation
         # ──────────────────────────────────────────────
 
-        acc, nll = test_DNN(model, test_loader)
+        acc, nll = test_DNN(model, test_loader, device, args)
         print(colored(f"Acc: {acc:.4f}, NLL: {nll:.4f}", 'blue'))
 
         # ──────────────────────────────────────────────

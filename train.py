@@ -90,7 +90,7 @@ def main(args):
 
     logging.info(f"The number of parameters in the model: {sum(p.numel() for p in model.parameters()):,}")
     
-    if args.data == 'cifar100' or args.data == 'tinyimagenet' or args.data == 'imagenet':
+    if args.data == 'cifar100' or args.data == 'tinyimagenet':
         # Multi Step Learning rate Schedule
         args.lr = 1e-1
         args.epochs = 300
@@ -100,8 +100,35 @@ def main(args):
             args.nesterov = None
         else:
             optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
-        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 200], gamma=0.1)
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[110, 220], gamma=0.1)
         
+    elif args.data == 'imagenet':
+        # Multi Step Learning rate Schedule
+        args.lr = 1e-1
+        args.epochs = 90
+        if args.optimizer == 'adam':
+            optim = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+            args.momentum = None
+            args.nesterov = None
+        else:
+            optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[30, 60], gamma=0.1)
+        
+    elif 'vit' in args.model:
+        print(colored(f"ViT Model Detected", 'red'))
+        
+        if not args.prune:
+            args.lr = 1e-1
+            
+        args.epochs = 300
+        if args.optimizer == 'adam':
+            optim = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+            args.momentum = None
+            args.nesterov = None
+        else:
+            optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[110, 220], gamma=0.1)
+            
     else:
         if args.optimizer == 'sgd':
             optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
@@ -244,6 +271,7 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
     parser.add_argument('--nesterov', action='store_true', help='Use Nesterov')
+    parser.add_argument('--std', type = float, default = 1e-3, help='Set a std for a good prior')
     args = parser.parse_args()
     
     print(colored(args, 'blue'))

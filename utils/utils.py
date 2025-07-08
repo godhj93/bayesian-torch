@@ -64,6 +64,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
         total = 0
         
         pbar = tqdm(enumerate(train_loader))
+        N = len(train_loader.dataset)
         for batch_idx, (data, target) in pbar:
     
             data, target = data.to(device), target.to(device)
@@ -87,26 +88,27 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             _, predicted = torch.max(output.data, 1)
             
             nll = F.cross_entropy(output, target)
+            scaling = bs
             
-            loss = nll * (1/args.t) + kl_loss / bs # args.t: Cold posterior temperature
+            loss = nll * (1/args.t) + kl_loss / scaling #N # args.t: Cold posterior temperature
             # loss = nll
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             
             nll_total.append(nll.detach().cpu())
-            kl_total.append(kl_loss.detach().cpu() / bs)
+            kl_total.append(kl_loss.detach().cpu() / scaling)
             
             total += target.size(0)
             correct += (predicted == target).sum().item()
             acc = correct / total            
             
-            pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):,}", 'blue'))
+            pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):,}, KL scaling: {scaling}", 'blue'))
             
         args.scheduler.step()
         
         acc_test, nll, kl = test_BNN(model = model, test_loader = test_loader, bs = bs, mc_runs = mc_runs, device = device, args = args)
-        logger.info(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}")
+        logger.info(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}, KL scaling: {scaling}")
         
         # args.scheduler.step()
         # print(colored(f"Learning rate: {optimizer.param_groups[0]['lr']}", 'red'))
@@ -403,9 +405,18 @@ def get_model(args, logger, distill=False):
         elif args.model == 'mobilenetv2':
             model = MobileNetV2_dnn(num_classes=10, width_mult=1.0)
         
-        elif args.model == 'vit-tiny':
+        elif args.model == 'vit-tiny-layernorm':
             model = ViT_Tiny_dnn(num_classes=10)
 
+        elif args.model == 'vit-tiny-dyt':
+            model = ViT_Tiny_dnn(num_classes=10, norm='dyt')
+        
+        elif args.model == 'vit-tiny-rms':
+            model = ViT_Tiny_dnn(num_classes=10, norm='rms')
+
+        elif args.model == 'vit-tiny-layernorm-relu':
+            model = ViT_Tiny_dnn(num_classes=10, norm='layernorm', act='relu')
+            print(model)
         elif args.model == 'mlp':
             model = MLP_dnn(input_size=28*28, hidden_size=100, output_size=10)
             
@@ -424,13 +435,19 @@ def get_model(args, logger, distill=False):
             model = densenet_bc_30_uni()
 
         elif args.model == 'resnet18':
-            model = ResNet18_uni()
+            model = ResNet18_uni(pretrained=False)
             
         elif args.model == 'mobilenetv2':
             model = MobileNetV2_uni()
             
-        elif args.model == 'vit-tiny': 
+        elif args.model == 'vit-tiny-layernorm': 
             model = ViT_Tiny_uni(num_classes=10)
+
+        elif args.model == 'vit-tiny-dyt':
+            model = ViT_Tiny_uni(num_classes=10, norm='dyt')
+
+        elif args.model == 'vit-tiny-rms':
+            model = ViT_Tiny_uni(num_classes=10, norm='rms')
             
         elif args.model == 'mlp':
             model = MLP_uni(input_size=28*28, hidden_size=100, output_size=10)
