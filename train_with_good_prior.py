@@ -57,7 +57,7 @@ def main(args):
         
     logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
     
-    if args.data == 'cifar100' or args.data == 'tinyimagenet' or args.data == 'imagenet':
+    if args.data == 'cifar100' or args.data == 'tinyimagenet':
         
         args.epochs = 300
         args.lr = 1e-1
@@ -66,6 +66,18 @@ def main(args):
         print(colored(f"Scheduler: MultiStepLR, Milestones: [100, 200], Gamma: 0.1", 'red'))
         print(colored(f"Epochs: {args.epochs}", 'red'))
         print(colored(f"Optim: SGD, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'red'))
+        
+    elif args.data == 'imagenet':
+        # Multi Step Learning rate Schedule
+        args.lr = 1e-1
+        args.epochs = 90
+        if args.optimizer == 'adam':
+            optim = torch.optim.Adam(bnn.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+            args.momentum = None
+            args.nesterov = None
+        else:
+            optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[30, 60], gamma=0.1)
         
     else:
         args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[1000000000], gamma=1.0) # No scheduler
