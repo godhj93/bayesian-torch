@@ -59,11 +59,11 @@ def main(args):
     
     if args.data == 'cifar100' or args.data == 'tinyimagenet':
         
-        args.epochs = 300
+        args.epochs = 90
         args.lr = 1e-1
         optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
-        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 200], gamma=0.1)
-        print(colored(f"Scheduler: MultiStepLR, Milestones: [100, 200], Gamma: 0.1", 'red'))
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[30, 60], gamma=0.1)
+        print(colored(f"Scheduler: MultiStepLR, Milestones: [30, 60], Gamma: 0.1", 'red'))
         print(colored(f"Epochs: {args.epochs}", 'red'))
         print(colored(f"Optim: SGD, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'red'))
         
@@ -78,7 +78,21 @@ def main(args):
         else:
             optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
         args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[30, 60], gamma=0.1)
+    
+    elif 'vit' in args.model:
+        print(colored(f"ViT Model Detected", 'red'))
         
+        if not args.prune:
+            args.lr = 1e-1
+            
+        args.epochs = 90
+        if args.optimizer == 'adam':
+            optim = torch.optim.Adam(bnn.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+            args.momentum = None
+            args.nesterov = None
+        else:
+            optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[30, 60], gamma=0.1)
     else:
         args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[1000000000], gamma=1.0) # No scheduler
         print(colored(f"No LR Scheduler: MultiStepLR, Milestones: [1000000000], Gamma: 1.0", 'red'))

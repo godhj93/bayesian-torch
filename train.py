@@ -95,16 +95,16 @@ def main(args):
         if not args.prune:
             args.lr = 1e-1
 
-        args.epochs = 300
+        args.epochs = 90
         if args.optimizer == 'adam':
             optim = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
             args.momentum = None
             args.nesterov = None
         else:
             optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
-        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[110, 220], gamma=0.1)
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[30, 60], gamma=0.1)
         
-    elif args.data == 'imagenet' or args.data == 'cifar10' :
+    elif args.data == 'imagenet' or args.data == 'cifar10':
         # Multi Step Learning rate Schedule
         if not args.prune:
             args.lr = 1e-1
@@ -124,14 +124,14 @@ def main(args):
         if not args.prune:
             args.lr = 1e-1
             
-        args.epochs = 300
+        args.epochs = 90
         if args.optimizer == 'adam':
             optim = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
             args.momentum = None
             args.nesterov = None
         else:
             optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
-        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[110, 220], gamma=0.1)
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[30, 60], gamma=0.1)
             
     else:
         if args.optimizer == 'sgd':
@@ -278,7 +278,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.9, help='Momentum')
     parser.add_argument('--nesterov', action='store_true', help='Use Nesterov')
     parser.add_argument('--std', type = float, default = 1e-3, help='Set a std for a good prior')
-    parser.add_argument('--scale', type=str, default='N', help='KLD scale [N, BS]')
+    parser.add_argument('--scale', type=str, default='BS', help='KLD scale [N, BS]')
     args = parser.parse_args()
     
     print(colored(args, 'blue'))
