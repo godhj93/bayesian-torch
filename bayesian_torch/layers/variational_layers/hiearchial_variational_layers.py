@@ -4,8 +4,8 @@ from torch.nn import functional as F
 from bayesian_torch.layers.variational_layers.linear_variational import LinearReparameterization
 from bayesian_torch.layers.variational_layers.conv_variational import Conv2dReparameterization
 
-HYPO_A = 1.0
-HYPO_B = 1.0
+HYPO_A = 3.0
+HYPO_B = 0.5
 
 class LinearReparameterizationHierarchical(LinearReparameterization):
     """
@@ -46,77 +46,58 @@ class LinearReparameterizationHierarchical(LinearReparameterization):
 
     def kl_loss(self):
         """
-        계층적 모델에 맞게 재정의된 KL-Divergence 계산 메소드.
-        ELBO = E[log P(D|W)] - KL_divergence
-        여기서는 KL_divergence 부분만 계산합니다.
+        Empirical Bayes Prior를 사용하도록 재정의된 KL-Divergence 계산 메소드.
+        사전 분포의 평균으로 self.prior_weight_mu를 사용합니다.
         """
-        # 양수 제약을 위해 파라미터에 exp를 취해줍니다.
         a_q = torch.exp(self.log_a_q)
         b_q = torch.exp(self.log_b_q)
 
-        # 디바이스 동기화
         self.prior_variance_hypo_a = self.prior_variance_hypo_a.to(self.mu_weight.device)
         self.prior_variance_hypo_b = self.prior_variance_hypo_b.to(self.mu_weight.device)
-        # --------------------------------------------------------------------
-        # 항 A: 가중치에 대한 KL-Divergence (E_q(σ^2)[D_KL(q(W)||p(W|σ^2))])
-        # --------------------------------------------------------------------
-
-        # 1. q(W)의 파라미터
+        
+        # --- 항 A: 가중치에 대한 KL-Divergence (수정된 부분) ---
         mu_W = self.mu_weight
-        sigma_W = torch.log1p(torch.exp(self.rho_weight)) # σ = log(1+exp(ρ))
-        kl_W_sum = 0
+        sigma_W = torch.log1p(torch.exp(self.rho_weight))
+        
+        # 사전 분포의 평균과 표준편차의 기댓값 계산
+        # prior_weight_mu는 main 스크립트에서 설정한 DNN 가중치입니다.
+        prior_mu_W = self.prior_weight_mu.to(mu_W.device)
+        E_inv_sigma_p_sq = a_q / b_q
+        E_log_sigma_p_sq = torch.log(b_q) - torch.digamma(a_q)
+
+        # KL(q(W) || p(W|σ²))의 기댓값 계산
+        # p(W|σ²) = N(prior_mu_W, σ²)를 사용
+        kl_W = 0.5 * torch.sum(
+            E_log_sigma_p_sq                                               # E[log σ_p²]
+            - torch.log(sigma_W**2)                                        # - log σ_q²
+            + E_inv_sigma_p_sq * (sigma_W**2 + (mu_W - prior_mu_W)**2)      # E[1/σ_p²] * (σ_q² + (μ_q - μ_p)²)
+            - 1
+        )
+        kl_W_sum = kl_W
 
         if self.bias:
             mu_b = self.mu_bias
             sigma_b = torch.log1p(torch.exp(self.rho_bias))
+            prior_mu_b = self.prior_bias_mu.to(mu_b.device) # 편향의 사전 분포 평균 (기본값 0)
 
-        # 2. E[1/σ_p^2] 와 E[log σ_p^2] 계산
-        # q(σ_p^2) = Inv-Gamma(a_q, b_q)
-        E_inv_sigma_p_sq = a_q / b_q
-        E_log_sigma_p_sq = torch.log(b_q) - torch.digamma(a_q)
-
-        # 3. 가중치(kernel)에 대한 KL 계산
-        # (μ_q^2 + σ_q^2)
-        sum_mu_sq_plus_sigma_sq_W = torch.sum(mu_W**2 + sigma_W**2)
-        # log σ_q^2
-        sum_log_sigma_sq_W = torch.sum(torch.log(sigma_W**2))
-
-        # 식: 0.5 * [ E[1/σ^2] * Σ(μ_w^2+σ_w^2) - D + D*E[log σ^2] - Σ log σ_w^2 ]
-        D_W = mu_W.numel() # 가중치의 총 개수
-        kl_W = 0.5 * (E_inv_sigma_p_sq * sum_mu_sq_plus_sigma_sq_W \
-                      - D_W \
-                      + D_W * E_log_sigma_p_sq \
-                      - sum_log_sigma_sq_W)
-        kl_W_sum += kl_W
-
-        # 4. 편향(bias)에 대한 KL 계산 (사용하는 경우)
-        if self.bias:
-            sum_mu_sq_plus_sigma_sq_b = torch.sum(mu_b**2 + sigma_b**2)
-            sum_log_sigma_sq_b = torch.sum(torch.log(sigma_b**2))
-            D_b = mu_b.numel() # 편향의 총 개수
-            kl_b = 0.5 * (E_inv_sigma_p_sq * sum_mu_sq_plus_sigma_sq_b \
-                          - D_b \
-                          + D_b * E_log_sigma_p_sq \
-                          - sum_log_sigma_sq_b)
+            kl_b = 0.5 * torch.sum(
+                E_log_sigma_p_sq
+                - torch.log(sigma_b**2)
+                + E_inv_sigma_p_sq * (sigma_b**2 + (mu_b - prior_mu_b)**2)
+                - 1
+            )
             kl_W_sum += kl_b
 
-
-        # --------------------------------------------------------------------
-        # 항 B: 분산에 대한 KL-Divergence (D_KL(q(σ_p^2)||p(σ_p^2)))
-        # --------------------------------------------------------------------
+        # --- 항 B: 분산에 대한 KL-Divergence (기존과 동일) ---
         a_0 = self.prior_variance_hypo_a
         b_0 = self.prior_variance_hypo_b
 
-        # 식: (a_q-a_0)ψ(a_q) - logΓ(a_q) + logΓ(a_0) + a_0(log b_q - log b_0) + (b_0-b_q) * a_q/b_q
         kl_sigma_p_sq = (a_q - a_0) * torch.digamma(a_q) \
                         - torch.lgamma(a_q) \
                         + torch.lgamma(a_0) \
                         + a_0 * (torch.log(b_q) - torch.log(b_0)) \
                         + (b_0 - b_q) * (a_q / b_q)
 
-        # --------------------------------------------------------------------
-        # 최종 KL Loss: 두 항의 합
-        # --------------------------------------------------------------------
         return kl_W_sum + kl_sigma_p_sq
     
     def forward(self, input, return_kl=True):
@@ -210,56 +191,45 @@ class Conv2dReparameterizationHierarchical(Conv2dReparameterization):
 
     def kl_loss(self):
         """
-        계층적 모델에 맞게 재정의된 KL-Divergence 계산 메소드.
+        Empirical Bayes Prior를 사용하도록 재정의된 KL-Divergence 계산 메소드.
+        사전 분포의 평균으로 self.prior_weight_mu를 사용합니다.
         """
-        # 양수 제약을 위해 파라미터에 exp를 취해줍니다.
         a_q = torch.exp(self.log_a_q)
         b_q = torch.exp(self.log_b_q)
 
-        # 디바이스 동기화
         self.prior_variance_hypo_a = self.prior_variance_hypo_a.to(self.mu_kernel.device)
         self.prior_variance_hypo_b = self.prior_variance_hypo_b.to(self.mu_kernel.device)
 
-        # --------------------------------------------------------------------
-        # 항 A: 가중치에 대한 KL-Divergence (E_q(σ^2)[D_KL(q(W)||p(W|σ^2))])
-        # --------------------------------------------------------------------
-        
-        # q(W)의 파라미터
+        # --- 항 A: 가중치에 대한 KL-Divergence (수정된 부분) ---
         mu_kernel = self.mu_kernel
         sigma_kernel = torch.log1p(torch.exp(self.rho_kernel))
-        kl_params_sum = 0
 
-        # E[1/σ_p^2] 와 E[log σ_p^2] 계산
+        prior_mu_kernel = self.prior_weight_mu.to(mu_kernel.device)
         E_inv_sigma_p_sq = a_q / b_q
         E_log_sigma_p_sq = torch.log(b_q) - torch.digamma(a_q)
 
-        # 컨볼루션 커널(kernel)에 대한 KL 계산
-        sum_mu_sq_plus_sigma_sq_kernel = torch.sum(mu_kernel**2 + sigma_kernel**2)
-        sum_log_sigma_sq_kernel = torch.sum(torch.log(sigma_kernel**2))
-        D_kernel = mu_kernel.numel()
-        kl_kernel = 0.5 * (E_inv_sigma_p_sq * sum_mu_sq_plus_sigma_sq_kernel \
-                           - D_kernel \
-                           + D_kernel * E_log_sigma_p_sq \
-                           - sum_log_sigma_sq_kernel)
-        kl_params_sum += kl_kernel
+        kl_kernel = 0.5 * torch.sum(
+            E_log_sigma_p_sq
+            - torch.log(sigma_kernel**2)
+            + E_inv_sigma_p_sq * (sigma_kernel**2 + (mu_kernel - prior_mu_kernel)**2)
+            - 1
+        )
+        kl_params_sum = kl_kernel
 
-        # 편향(bias)에 대한 KL 계산 (사용하는 경우)
         if self.bias:
             mu_bias = self.mu_bias
             sigma_bias = torch.log1p(torch.exp(self.rho_bias))
-            
-            sum_mu_sq_plus_sigma_sq_bias = torch.sum(mu_bias**2 + sigma_bias**2)
-            sum_log_sigma_sq_bias = torch.sum(torch.log(sigma_bias**2))
-            D_bias = mu_bias.numel()
-            kl_bias = 0.5 * (E_inv_sigma_p_sq * sum_mu_sq_plus_sigma_sq_bias \
-                             - D_bias \
-                             + D_bias * E_log_sigma_p_sq \
-                             - sum_log_sigma_sq_bias)
+            prior_mu_bias = self.prior_bias_mu.to(mu_bias.device)
+
+            kl_bias = 0.5 * torch.sum(
+                E_log_sigma_p_sq
+                - torch.log(sigma_bias**2)
+                + E_inv_sigma_p_sq * (sigma_bias**2 + (mu_bias - prior_mu_bias)**2)
+                - 1
+            )
             kl_params_sum += kl_bias
 
-        # --------------------------------------------------------------------
-        # 항 B: 분산에 대한 KL-Divergence (D_KL(q(σ_p^2)||p(σ_p^2)))
-        # --------------------------------------------------------------------
+        # --- 항 B: 분산에 대한 KL-Divergence (기존과 동일) ---
         a_0 = self.prior_variance_hypo_a
         b_0 = self.prior_variance_hypo_b
 
@@ -269,9 +239,6 @@ class Conv2dReparameterizationHierarchical(Conv2dReparameterization):
                         + a_0 * (torch.log(b_q) - torch.log(b_0)) \
                         + (b_0 - b_q) * (a_q / b_q)
 
-        # --------------------------------------------------------------------
-        # 최종 KL Loss: 두 항의 합
-        # --------------------------------------------------------------------
         return kl_params_sum + kl_sigma_p_sq
         
     def forward(self, input, return_kl=True):
