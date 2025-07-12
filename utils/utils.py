@@ -78,7 +78,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             outputs =[]
             kls = []
             
-            for _ in range(1): # For training, mc_runs is set to 1
+            for _ in range(10): # For training, mc_runs is set to 1
                 if not args.moped:
                     output, kl = model(data)
                     outputs.append(output)
