@@ -31,7 +31,8 @@ from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_dete
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
 from bayesian_torch.layers.variational_layers.conv_variational import Conv2dReparameterization, Conv2dReparameterization_Multivariate
 from bayesian_torch.layers.variational_layers.linear_variational import LinearReparameterization
-
+from bayesian_torch.models.bayesian.resnet_hvariational import resnet20 as resnet20_hvariational
+from bayesian_torch.layers.variational_layers.hiearchial_variational_layers import Conv2dReparameterizationHierarchical, LinearReparameterizationHierarchical
 # Dataset
 from torchvision import datasets, transforms
 
@@ -442,6 +443,9 @@ def get_model(args, logger, distill=False):
         if args.model == 'resnet20':
             model = resnet20_uni()
             
+        elif args.model == 'resnet20_h':
+            model = resnet20_hvariational()
+            
         elif args.model == 'densenet30':
             model = densenet_bc_30_uni()
 
@@ -552,7 +556,13 @@ def get_model(args, logger, distill=False):
                 model.linear = torch.nn.Linear(64, 200)
             elif args.type == 'uni':
                 model.linear = LinearReparameterization(64, 200)
-            
+        
+        elif args.model == 'resnet20_h':
+            if args.type == 'dnn':
+                model.linear = torch.nn.Linear(64, 200)
+            elif args.type == 'uni':
+                model.linear = LinearReparameterizationHierarchical(64, 200)
+                
         elif args.model == 'densenet30':
             if args.type == 'dnn':
                 model.classifier = torch.nn.Linear(model.classifier.in_features, 200, bias = True)
