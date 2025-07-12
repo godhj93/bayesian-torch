@@ -57,45 +57,52 @@ def main(args):
         
     logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
     
-    if args.data == 'cifar100' or args.data == 'tinyimagenet':
-        
-        args.epochs = 90
-        args.lr = 1e-1
-        optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
-        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[30, 60], gamma=0.1)
-        print(colored(f"Scheduler: MultiStepLR, Milestones: [30, 60], Gamma: 0.1", 'red'))
-        print(colored(f"Epochs: {args.epochs}", 'red'))
-        print(colored(f"Optim: SGD, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'red'))
-        
-    elif args.data == 'imagenet' or args.data == 'cifar10':
-        # Multi Step Learning rate Schedule
-        args.lr = 1e-1
+    # 1. 파라미터를 두 그룹으로 나눕니다.
+    # 'log_a_q' 또는 'log_b_q'를 이름에 포함하는 파라미터 (사전 분포 파라미터)
+    prior_params = [param for name, param in bnn.named_parameters() if 'log_a_q' in name or 'log_b_q' in name]
+
+    # 그 외 모든 파라미터 (기존 가중치 파라미터)
+    base_params = [param for name, param in bnn.named_parameters() if not ('log_a_q' in name or 'log_b_q' in name)]
+
+    # 2. 각 그룹에 다른 learning rate를 적용할 파라미터 리스트를 생성합니다.
+    # 계층적 모델이 아닐 경우 prior_params 리스트는 비어있게 됩니다.
+    param_groups = [
+        {'params': base_params},
+        {'params': prior_params, 'lr': args.lr_prior} # 사전 분포 파라미터에만 다른 lr 적용
+    ]
+    
+    if args.data in ['cifar10', 'cifar100', 'tinyimagenet', 'imagenet'] or 'vit' in args.model:
+        if not args.prune:
+            args.lr = 1e-1 # 기본 LR
+
         args.epochs = 90
         if args.optimizer == 'adam':
-            optim = torch.optim.Adam(bnn.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+            # Adam 옵티마이저에 파라미터 그룹 전달
+            optim = torch.optim.Adam(param_groups, lr=args.lr, weight_decay=args.weight_decay)
             args.momentum = None
             args.nesterov = None
         else:
-            optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+            # SGD 옵티마이저에 파라미터 그룹 전달
+            optim = torch.optim.SGD(param_groups, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=args.nesterov)
         args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[30, 60], gamma=0.1)
     
-    elif 'vit' in args.model:
-        print(colored(f"ViT Model Detected", 'red'))
+    else:
+        if args.optimizer == 'sgd':
+            optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
+    
+        elif args.optimizer == 'adam':
         
-        if not args.prune:
-            args.lr = 1e-1
-            
-        args.epochs = 90
-        if args.optimizer == 'adam':
-            optim = torch.optim.Adam(bnn.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+            optim = torch.optim.Adam(bnn.parameters(), lr=args.lr)
             args.momentum = None
             args.nesterov = None
+            args.weight_decay = None
+            
         else:
-            optim = torch.optim.SGD(bnn.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
-        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[30, 60], gamma=0.1)
-    else:
-        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[1000000000], gamma=1.0) # No scheduler
-        print(colored(f"No LR Scheduler: MultiStepLR, Milestones: [1000000000], Gamma: 1.0", 'red'))
+            raise ValueError(f"Unsupported optimizer: {args.optimizer}")        
+        
+        logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100000], gamma=0.1) # We don't want to change the learning rate schedule for now.
+        
         
     log_params = {
         'data': args.data,
@@ -201,6 +208,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train')
     parser.add_argument('--mc_runs', type=int, default=30, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
+    parser.add_argument('--lr_prior', type=float, default=1e-3, help='Learning rate for prior parameters')
     parser.add_argument('--bs', type=int, default=128, help='Batch size')
     parser.add_argument('--model', type=str, help='Model to train [resnet18, resnet20, densenet30, densenet121, mobilenetv2]')
     parser.add_argument('--type', type=str, default='dnn', help='Type of model [dnn, uni, multi]')

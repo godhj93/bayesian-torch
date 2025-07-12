@@ -384,7 +384,7 @@ def get_model(args, logger, distill=False):
         
     if args.type == 'dnn':
             
-        if args.model == 'resnet20':
+        if args.model == 'resnet20' or args.model == 'resnet20_h':
             model = resnet20_deterministic()
 
         elif args.model == 'resnet18':
