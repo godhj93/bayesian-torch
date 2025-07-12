@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import torch.nn.init as init
 # from bayesian_torch.layers import Conv2dReparameterization
 # from bayesian_torch.layers import LinearReparameterization
-from bayesian_torch.layers.variational_layers.hiearchial_variational_layers import Conv2dReparameterizationHierarchical, LinearReparameterizationHierarchical
+from bayesian_torch.layers.variational_layers.hiearchial_variational_layers import Conv2dReparameterizationHierarchical, LinearReparameterizationHierarchical, Conv2dReparameterizationHierarchical_Weightwise, LinearReparameterizationHierarchical_Weightwise
 __all__ = [
     'ResNet', 'resnet20', 'resnet32', 'resnet44', 'resnet56', 'resnet110'
 ]
@@ -41,31 +41,57 @@ class LambdaLayer(nn.Module):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, in_planes, planes, stride=1, option='A'):
+    def __init__(self, in_planes, planes, stride=1, option='A', weight_wise=False):
         super(BasicBlock, self).__init__()
-        self.conv1 = Conv2dReparameterizationHierarchical(
-            in_channels=in_planes,
-            out_channels=planes,
-            kernel_size=3,
-            stride=stride,
-            padding=1,
-            prior_mean=prior_mu,
-            prior_variance=prior_sigma,
-            posterior_mu_init=posterior_mu_init,
-            posterior_rho_init=posterior_rho_init,
-            bias=False)
+        
+        if weight_wise:
+            self.conv1 = Conv2dReparameterizationHierarchical_Weightwise(
+                in_channels=in_planes,
+                out_channels=planes,
+                kernel_size=3,
+                stride=stride,
+                padding=1,
+                prior_mean=prior_mu,
+                prior_variance=prior_sigma,
+                posterior_mu_init=posterior_mu_init,
+                posterior_rho_init=posterior_rho_init,
+                bias=False)
+            self.conv2 = Conv2dReparameterizationHierarchical_Weightwise(
+                in_channels=planes,
+                out_channels=planes,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                prior_mean=prior_mu,
+                prior_variance=prior_sigma,
+                posterior_mu_init=posterior_mu_init,
+                posterior_rho_init=posterior_rho_init,
+                bias=False)
+        else:
+            self.conv1 = Conv2dReparameterizationHierarchical(
+                in_channels=in_planes,
+                out_channels=planes,
+                kernel_size=3,
+                stride=stride,
+                padding=1,
+                prior_mean=prior_mu,
+                prior_variance=prior_sigma,
+                posterior_mu_init=posterior_mu_init,
+                posterior_rho_init=posterior_rho_init,
+                bias=False)
+            self.conv2 = Conv2dReparameterizationHierarchical(
+                in_channels=planes,
+                out_channels=planes,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                prior_mean=prior_mu,
+                prior_variance=prior_sigma,
+                posterior_mu_init=posterior_mu_init,
+                posterior_rho_init=posterior_rho_init,
+                bias=False)
+        
         self.bn1 = nn.SyncBatchNorm(planes)
-        self.conv2 = Conv2dReparameterizationHierarchical(
-            in_channels=planes,
-            out_channels=planes,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-            prior_mean=prior_mu,
-            prior_variance=prior_sigma,
-            posterior_mu_init=posterior_mu_init,
-            posterior_rho_init=posterior_rho_init,
-            bias=False)
         self.bn2 = nn.SyncBatchNorm(planes)
 
         self.shortcut = nn.Sequential()
@@ -78,17 +104,30 @@ class BasicBlock(nn.Module):
                     x[:, :, ::2, ::2],
                     (0, 0, 0, 0, planes // 4, planes // 4), "constant", 0))
             elif option == 'B':
-                self.shortcut = nn.Sequential(
-                    Conv2dReparameterizationHierarchical(
-                        in_channels=in_planes,
-                        out_channels=self.expansion * planes,
-                        kernel_size=1,
-                        stride=stride,
-                        prior_mean=prior_mu,
-                        prior_variance=prior_sigma,
-                        posterior_mu_init=posterior_mu_init,
-                        posterior_rho_init=posterior_rho_init,
-                        bias=False), nn.SyncBatchNorm(self.expansion * planes))
+                if weight_wise:
+                    self.shortcut = nn.Sequential(
+                        Conv2dReparameterizationHierarchical_Weightwise(
+                            in_channels=in_planes,
+                            out_channels=self.expansion * planes,
+                            kernel_size=1,
+                            stride=stride,
+                            prior_mean=prior_mu,
+                            prior_variance=prior_sigma,
+                            posterior_mu_init=posterior_mu_init,
+                            posterior_rho_init=posterior_rho_init,
+                            bias=False), nn.SyncBatchNorm(self.expansion * planes))
+                else:
+                    self.shortcut = nn.Sequential(
+                        Conv2dReparameterizationHierarchical(
+                            in_channels=in_planes,
+                            out_channels=self.expansion * planes,
+                            kernel_size=1,
+                            stride=stride,
+                            prior_mean=prior_mu,
+                            prior_variance=prior_sigma,
+                            posterior_mu_init=posterior_mu_init,
+                            posterior_rho_init=posterior_rho_init,
+                            bias=False), nn.SyncBatchNorm(self.expansion * planes))
 
     def forward(self, x):
         
@@ -111,41 +150,65 @@ class BasicBlock(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10):
+    def __init__(self, block, num_blocks, num_classes=10, weight_wise=False):
         super(ResNet, self).__init__()
         self.in_planes = 16
 
-        self.conv1 = Conv2dReparameterizationHierarchical(
-            in_channels=3,
-            out_channels=16,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-            prior_mean=prior_mu,
-            prior_variance=prior_sigma,
-            posterior_mu_init=posterior_mu_init,
-            posterior_rho_init=posterior_rho_init,
-            bias=False)
+        if weight_wise:
+            self.conv1 = Conv2dReparameterizationHierarchical_Weightwise(
+                in_channels=3,
+                out_channels=16,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                prior_mean=prior_mu,
+                prior_variance=prior_sigma,
+                posterior_mu_init=posterior_mu_init,
+                posterior_rho_init=posterior_rho_init,
+                bias=False)
+        else:
+            self.conv1 = Conv2dReparameterizationHierarchical(
+                in_channels=3,
+                out_channels=16,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                prior_mean=prior_mu,
+                prior_variance=prior_sigma,
+                posterior_mu_init=posterior_mu_init,
+                posterior_rho_init=posterior_rho_init,
+                bias=False)
         self.bn1 = nn.SyncBatchNorm(16)
-        self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
-        self.linear = LinearReparameterizationHierarchical(
-            in_features=64,
-            out_features=num_classes,
-            prior_mean=prior_mu,
-            prior_variance=prior_sigma,
-            posterior_mu_init=posterior_mu_init,
-            posterior_rho_init=posterior_rho_init,
-        )
+        self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1, weight_wise=weight_wise)
+        self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2, weight_wise=weight_wise)
+        self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2, weight_wise=weight_wise)
+        
+        if weight_wise:
+            self.linear = LinearReparameterizationHierarchical_Weightwise(
+                in_features=64 * block.expansion,
+                out_features=num_classes,
+                prior_mean=prior_mu,
+                prior_variance=prior_sigma,
+                posterior_mu_init=posterior_mu_init,
+                posterior_rho_init=posterior_rho_init,
+            )
+        else:
+            self.linear = LinearReparameterizationHierarchical(
+                in_features=64,
+                out_features=num_classes,
+                prior_mean=prior_mu,
+                prior_variance=prior_sigma,
+                posterior_mu_init=posterior_mu_init,
+                posterior_rho_init=posterior_rho_init,
+            )
 
         self.apply(_weights_init)
 
-    def _make_layer(self, block, planes, num_blocks, stride):
+    def _make_layer(self, block, planes, num_blocks, stride, weight_wise):
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
         for stride in strides:
-            layers.append(block(self.in_planes, planes, stride))
+            layers.append(block(self.in_planes, planes, stride, weight_wise=weight_wise))
             self.in_planes = planes * block.expansion
 
         return nn.Sequential(*layers)
@@ -169,7 +232,8 @@ class ResNet(nn.Module):
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
         out, kl = self.linear(out)
-        kl_sum += kl
+        # print(kl, kl.shape)
+        kl_sum += kl.item()
         return out, kl_sum
 
 
