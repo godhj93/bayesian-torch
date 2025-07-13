@@ -103,7 +103,6 @@ def main(args):
         logging.info(colored(f"Optimizer: {args.optimizer}, Learning rate: {args.lr}, Weight decay: {args.weight_decay}, Momentum: {args.momentum}", 'green'))
         args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100000], gamma=0.1) # We don't want to change the learning rate schedule for now.
         
-        
     log_params = {
         'data': args.data,
         'model': args.model,
@@ -121,7 +120,9 @@ def main(args):
         'timestamp': date,
         'sparsity': sparsity,
         'std': args.std,
-        'scale': args.scale
+        'scale': args.scale,
+        'ig_a': args.ig_a,
+        'ig_b': args.ig_b,
     }
 
     params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type', 'scale']])
@@ -156,33 +157,49 @@ def main(args):
         
         if args.MOPED: 
             std = torch.where(mu == 0 , torch.ones_like(mu), torch.ones_like(mu))
+            prior_variance_hypo_a = torch.ones_like(mu)
+            prior_variance_hypo_b = torch.ones_like(mu)
+            
         else:
             std = torch.where(mu == 0 , torch.ones_like(mu), torch.ones_like(mu) * args.std)
             
+            prior_variance_hypo_a = torch.where(mu == 0, torch.ones_like(mu), torch.ones_like(mu) * args.ig_a)
+            prior_variance_hypo_b = torch.where(mu == 0, torch.ones_like(mu), torch.ones_like(mu) * args.ig_b)
+            
         bnn_layer.prior_weight_mu = mu
+        # Hierarchial models do not use prior_weight_sigma
         bnn_layer.prior_weight_sigma = std
-
-        logging.info(colored(f"Setting a Layer: {dnn_layer}", 'yellow'))
+        bnn_layer.prior_variance_hypo_a = prior_variance_hypo_a
+        bnn_layer.prior_variance_hypo_b = prior_variance_hypo_b
+        # logging.info(colored(f"Setting a Layer: {dnn_layer}", 'yellow'))
         
     # Set the prior for the linear layers
     dnn_linear_layer = get_linear_layers(dnn)
     bnn_linear_layer = get_linear_layers(bnn)
-    print(colored(f"Number of Linear Layers: {len(dnn_linear_layer)}", 'red'))
-    print(colored(f"Number of Linear Layers: {len(bnn_linear_layer)}", 'red'))
+    # print(colored(f"Number of Linear Layers: {len(dnn_linear_layer)}", 'red'))
+    # print(colored(f"Number of Linear Layers: {len(bnn_linear_layer)}", 'red'))
     for dnn_layer, bnn_layer in zip(dnn_linear_layer, bnn_linear_layer):
         
         mu = dnn_layer.weight.detach().cpu().clone()
         
         if args.MOPED: 
             std = torch.where(mu == 0 , torch.ones_like(mu), torch.ones_like(mu))
+            prior_variance_hypo_a = torch.ones_like(mu)
+            prior_variance_hypo_b = torch.ones_like(mu)
+            
         else:
             std = torch.where(mu == 0 , torch.ones_like(mu), torch.ones_like(mu) * args.std)
+            prior_variance_hypo_a = torch.where(mu == 0, torch.ones_like(mu), torch.ones_like(mu) * args.ig_a)
+            prior_variance_hypo_b = torch.where(mu == 0, torch.ones_like(mu), torch.ones_like(mu) * args.ig_b)
             
         bnn_layer.prior_weight_mu = mu
+        # Hierarchial models do not use prior_weight_sigma
         bnn_layer.prior_weight_sigma = std
+        bnn_layer.prior_hypo_a_weight = prior_variance_hypo_a
+        bnn_layer.prior_hypo_b_weight = prior_variance_hypo_b
         
-        logger.info(colored(f"Setting a Layer: {dnn_layer}", 'yellow'))
-        
+        # logger.info(colored(f"Setting a Layer: {dnn_layer}", 'yellow'))
+
     # Save the arguments
     with open(f"{log_path}/config.txt", "w") as f:
         for key, value in vars(args).items():
@@ -209,6 +226,8 @@ if __name__ == '__main__':
     parser.add_argument('--mc_runs', type=int, default=30, help='Number of Monte Carlo runs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--lr_prior', type=float, default=1e-3, help='Learning rate for prior parameters')
+    parser.add_argument('--ig_a', type=float, default=1.0, help='Inverse Gamma a parameter')
+    parser.add_argument('--ig_b', type=float, default=1.0, help='Inverse Gamma b parameter')
     parser.add_argument('--bs', type=int, default=128, help='Batch size')
     parser.add_argument('--model', type=str, help='Model to train [resnet18, resnet20, densenet30, densenet121, mobilenetv2]')
     parser.add_argument('--type', type=str, default='dnn', help='Type of model [dnn, uni, multi]')
@@ -231,4 +250,5 @@ if __name__ == '__main__':
     parser.add_argument('--scale', type=str, default='', help='KLD scale')
     args = parser.parse_args()
     
+    print(colored(f"Arguments: {args}", 'yellow'))
     main(args)
