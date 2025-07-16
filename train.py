@@ -90,6 +90,7 @@ def main(args):
 
     logging.info(f"The number of parameters in the model: {sum(p.numel() for p in model.parameters()):,}")
     
+    optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
     # 1. 파라미터를 두 그룹으로 나눕니다.
     # 'log_a_q' 또는 'log_b_q'를 이름에 포함하는 파라미터 (사전 분포 파라미터)
     prior_params = [param for name, param in model.named_parameters() if 'log_a_q' in name or 'log_b_q' in name]
@@ -108,7 +109,7 @@ def main(args):
         if not args.prune:
             args.lr = 1e-1 # 기본 LR
 
-        args.epochs = 90
+        args.epochs = 300
         if args.optimizer == 'adam':
             # Adam 옵티마이저에 파라미터 그룹 전달
             optim = torch.optim.Adam(param_groups, lr=args.lr, weight_decay=args.weight_decay)
@@ -117,7 +118,7 @@ def main(args):
         else:
             # SGD 옵티마이저에 파라미터 그룹 전달
             optim = torch.optim.SGD(param_groups, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=args.nesterov)
-        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[30, 60], gamma=0.1)
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 200], gamma=0.1)
     
     else:
         if args.optimizer == 'sgd':
@@ -155,6 +156,7 @@ def main(args):
         'timestamp': date,
         'scale': args.scale,
         'std': args.std,
+        'prior_type': args.prior_type,
     }
 
     params_str = "_".join([f"{key}_{value}" for key, value in log_params.items() if key not in ['data', 'model', 'date', 'type', 'scale']])
@@ -267,6 +269,7 @@ if __name__ == '__main__':
     parser.add_argument('--nesterov', action='store_true', help='Use Nesterov')
     parser.add_argument('--std', type = float, default = 1e-3, help='Set a std for a good prior')
     parser.add_argument('--scale', type=str, default='BS', help='KLD scale [N, BS]')
+    parser.add_argument('--prior_type', type=str, help='Prior type [normal, laplace]')
     args = parser.parse_args()
     
     print(colored(args, 'blue'))

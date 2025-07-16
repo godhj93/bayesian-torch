@@ -441,13 +441,13 @@ def get_model(args, logger, distill=False):
     elif args.type == 'uni':
             
         if args.model == 'resnet20':
-            model = resnet20_uni()
+            model = resnet20_uni(args.prior_type)
             
         elif args.model == 'resnet20_h':
             model = resnet20_hvariational()
             
         elif args.model == 'densenet30':
-            model = densenet_bc_30_uni()
+            model = densenet_bc_30_uni(prior_type=args.prior_type)
 
         elif args.model == 'resnet18':
             model = ResNet18_uni(pretrained=False)
@@ -534,7 +534,7 @@ def get_model(args, logger, distill=False):
             if args.type == 'dnn':
                 model.classifier = torch.nn.Linear(model.classifier.in_features, 100, bias = True)
             if args.type == 'uni':
-                model.classifier = LinearReparameterization(model.classifier.in_features, 100, bias = True)
+                model.classifier = LinearReparameterization(model.classifier.in_features, 100, bias = True, prior_type=args.prior_type)
         else:
             
             raise NotImplementedError("Not implemented yet")

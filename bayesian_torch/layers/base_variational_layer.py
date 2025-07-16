@@ -50,7 +50,7 @@ class BaseVariationalLayer_(nn.Module):
     def dnn_to_bnn_flag(self, value):
         self._dnn_to_bnn_flag = value
 
-    def kl_div(self, mu_q, sigma_q, mu_p, sigma_p):
+    def kl_div(self, mu_q, sigma_q, mu_p, sigma_p, prior_type):
         """
         Calculates kl divergence between two gaussians (Q || P)
 
@@ -62,10 +62,34 @@ class BaseVariationalLayer_(nn.Module):
 
         returns torch.Tensor of shape 0
         """
-        kl = torch.log(sigma_p) - torch.log(
-            sigma_q) + (sigma_q**2 + (mu_q - mu_p)**2) / (2 *
-                                                          (sigma_p**2)) - 0.5
-        return kl.mean()
+        
+        if prior_type == 'normal':
+        # This implementation is correct.
+            kl = torch.log(sigma_p) - torch.log(
+            sigma_q) + (sigma_q**2 + (mu_q - mu_p)**2) / (2 * (sigma_p**2)) - 0.5
+            return kl.mean()
+
+        elif prior_type == 'laplace':
+            # Define the distributions using torch.distributions
+            q_dist = torch.distributions.Normal(mu_q, sigma_q)
+            p_dist = torch.distributions.Laplace(mu_p, sigma_p)
+
+            # 1. Get a sample from q(w) using the reparameterization trick
+            # .rsample() is essential for backpropagation
+            w = q_dist.rsample()
+
+            # 2. Calculate the log probability of the sample w under both distributions
+            log_q_w = q_dist.log_prob(w)
+            log_p_w = p_dist.log_prob(w)
+
+            # 3. Approximate KL(q||p) = E_q[log(q/p)] with a single sample
+            kl = log_q_w - log_p_w
+            
+            # 4. Return the mean KL divergence over all parameters
+            return kl.mean()
+
+        else:
+            raise ValueError(f"Unknown prior_type: {prior_type}")
 
     def kl_div_multivariate_gaussian(self, mu_q, sigma_q, mu_p, sigma_p, device='cuda'):
         """
