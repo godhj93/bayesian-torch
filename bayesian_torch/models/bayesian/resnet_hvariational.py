@@ -189,6 +189,7 @@ class ResNet(nn.Module):
                 out_features=num_classes,
                 prior_mean=prior_mu,
                 prior_variance=prior_sigma,
+                prior_type = 'normal',
                 posterior_mu_init=posterior_mu_init,
                 posterior_rho_init=posterior_rho_init,
             )

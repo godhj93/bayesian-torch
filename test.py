@@ -397,6 +397,8 @@ if __name__ == '__main__':
     parser.add_argument('--multi_gpu', action='store_true', help='Use mode posterior')
     parser.add_argument('--ood', nargs='+', help='Out-of-distribution datasets')
     parser.add_argument('--scale', type=str, default='N', help='KLD scale')
+    parser.add_argument('--prior_type', type=str, help='Prior type [normal, laplace]')
+
     args = parser.parse_args()
     
     print(colored(args, 'green'))

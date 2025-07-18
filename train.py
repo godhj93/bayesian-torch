@@ -109,7 +109,6 @@ def main(args):
         if not args.prune:
             args.lr = 1e-1 # 기본 LR
 
-        args.epochs = 300
         if args.optimizer == 'adam':
             # Adam 옵티마이저에 파라미터 그룹 전달
             optim = torch.optim.Adam(param_groups, lr=args.lr, weight_decay=args.weight_decay)
@@ -118,9 +117,10 @@ def main(args):
         else:
             # SGD 옵티마이저에 파라미터 그룹 전달
             optim = torch.optim.SGD(param_groups, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=args.nesterov)
-        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 200], gamma=0.1)
+        args.scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[args.epochs//3, args.epochs//3*2], gamma=0.1)
     
     else:
+        raise ValueError(f"Unsupported dataset: {args.data}")
         if args.optimizer == 'sgd':
             optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov = args.nesterov)
     

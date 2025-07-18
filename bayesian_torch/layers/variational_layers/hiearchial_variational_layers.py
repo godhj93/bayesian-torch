@@ -300,6 +300,7 @@ class LinearReparameterizationHierarchical_Weightwise(LinearReparameterization):
                  out_features,
                  prior_mean=0.0,
                  prior_variance=1.0,
+                 prior_type = 'normal',
                  posterior_mu_init=0.0,
                  posterior_rho_init=-3.0,
                  bias=True): # a_0, b_0 인자 제거
@@ -308,6 +309,7 @@ class LinearReparameterizationHierarchical_Weightwise(LinearReparameterization):
                          out_features=out_features,
                          prior_mean=prior_mean,
                          prior_variance=prior_variance,
+                         prior_type=prior_type,
                          posterior_mu_init=posterior_mu_init,
                          posterior_rho_init=posterior_rho_init,
                          bias=bias)
@@ -325,7 +327,6 @@ class LinearReparameterizationHierarchical_Weightwise(LinearReparameterization):
         # Default 
         self.prior_hypo_a_weight = torch.ones_like(self.mu_weight)
         self.prior_hypo_b_weight = torch.ones_like(self.mu_weight)
-        
         
     def kl_loss(self):
         """
