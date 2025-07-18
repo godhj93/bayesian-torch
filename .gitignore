@@ -1,4 +1,7 @@
+paper_result/
 old_runs/
+imagenet/
+runs_server/
 tiny-imagenet-200/
 # Byte-compiled / optimized / DLL files
 __pycache__/
