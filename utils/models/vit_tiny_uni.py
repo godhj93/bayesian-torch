@@ -5,67 +5,10 @@ import torch.nn.functional as F
 from timm.models.vision_transformer import VisionTransformer, Attention as TimmAttention
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn, get_kl_loss
 from bayesian_torch.layers.variational_layers.linear_variational import LinearReparameterization
-
-
-class Attention(nn.Module):
-    def __init__(
-        self,
-        dim: int,
-        num_heads: int = 8,
-        qkv_bias: bool = False,
-        qk_norm: bool = False,
-        proj_bias: bool = True,
-        attn_drop: float = 0.,
-        proj_drop: float = 0.,
-        norm_layer: Type[nn.Module] = nn.LayerNorm,
-        use_plain_qk: bool = False,  # << NEW
-    ) -> None:
-        super().__init__()
-        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
-        self.num_heads = num_heads
-        self.head_dim = dim // num_heads
-        self.scale = self.head_dim ** -0.5
-
-        # selectively replace q, k with plain Linear
-        if use_plain_qk:
-            self.q = nn.Linear(dim, dim, bias=qkv_bias)
-            self.k = nn.Linear(dim, dim, bias=qkv_bias)
-        else:
-            self.q = LinearReparameterization(dim, dim, bias=qkv_bias)
-            self.k = LinearReparameterization(dim, dim, bias=qkv_bias)
-
-        self.v = LinearReparameterization(dim, dim, bias=qkv_bias)
-        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = LinearReparameterization(dim, dim, bias=proj_bias)
-        self.proj_drop = nn.Dropout(proj_drop)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        kl = 0
-        B, N, C = x.shape
-        q = self.q(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
-        k = self.k(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
-        # v, kld = self.v(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
-        v, kld = self.v(x)
-        v = v.reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
-
-        q = self.q_norm(q)
-        k = self.k_norm(k)
-
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1)).softmax(dim=-1)
-        attn = self.attn_drop(attn)
-        x = attn @ v
-
-        x = x.transpose(1, 2).reshape(B, N, C)
-        x, kld = self.proj(x)
-        x = self.proj_drop(x)
-        return x
+from utils.models.dynamic_tanh import DynamicTanh, convert_gelu_to_relu, convert_ln_to_dyt, convert_ln_to_rms
 
 class ViT_Tiny_uni(nn.Module):
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes=10, norm = 'layernorm', model = 'original'):
         super().__init__()
         const_bnn_prior_parameters = {
             'prior_mu': 0.0,
@@ -77,15 +20,47 @@ class ViT_Tiny_uni(nn.Module):
             'moped_delta': 0.5,
         }
 
-        self.base_model = VisionTransformer(
-            img_size=32,
-            patch_size=4,
-            embed_dim=192 // 2,
-            depth=6 // 2,
-            num_heads=3,
-            mlp_ratio=4.0,
-            num_classes=num_classes
-        )
+        # load ViT backbone
+        if model == 'original':
+            self.base_model = VisionTransformer(
+                img_size=32,
+                patch_size=4,
+                embed_dim=192 // 2,
+                depth=6 // 2,
+                num_heads=3,
+                mlp_ratio=4.0,
+                num_classes=num_classes
+            )
+        elif model == 'nano':
+            self.base_model = VisionTransformer(
+                img_size=32,
+                patch_size=8,       # 큰 패치로 시퀀스 길이를 16으로 단축
+                embed_dim=96,       # 임베딩 차원을 낮게 설정
+                depth=4,            # 얕은 깊이
+                num_heads=3,        # 헤드 수 감소
+                mlp_ratio=2.0,      # MLP 확장 비율 축소 (기본값 4.0)
+                num_classes=num_classes
+            )
+        elif model == 'micro':
+            self.base_model = VisionTransformer(
+                img_size=32,
+                patch_size=4,       # 작은 패치로 더 많은 특징 학습 (시퀀스 길이 64)
+                embed_dim=192,      # 표준적인 경량 모델의 임베딩 차원
+                depth=6,            # 중간 수준의 깊이
+                num_heads=3,        # 임베딩 차원에 맞춰 헤드 수 조절
+                mlp_ratio=2.0,      # MLP 확장 비율 축소
+                num_classes=num_classes
+            )
+        elif model == 'pico':
+            self.base_model = VisionTransformer(
+        img_size=32,
+        patch_size=4,
+        embed_dim=256,      # 표현력을 위해 임베딩 차원 확장
+        depth=7,            # 모델 깊이 추가
+        num_heads=4,        # 확장된 임베딩 차원에 맞춰 헤드 수 증가
+        mlp_ratio=3.0,      # 성능을 위해 MLP 비율을 소폭 상향
+        num_classes=num_classes
+    )
 
         num_ftrs = self.base_model.head.in_features
         self.base_model.head = nn.Linear(num_ftrs, num_classes)
@@ -93,44 +68,7 @@ class ViT_Tiny_uni(nn.Module):
         # Apply BNN conversion first
         dnn_to_bnn(self.base_model, const_bnn_prior_parameters)
 
-        def _replace_attn(module: nn.Module):
-            for name, child in list(module.named_children()):
-                if isinstance(child, TimmAttention) or isinstance(child, Attention):
-                    # safer way to extract dim
-                    try:
-                        parent_block = module  # usually Block
-                        dim = parent_block.norm1.normalized_shape[0]
-                    except AttributeError:
-                        print(f"Could not extract 'dim' from {module}. Skipping.")
-                        continue
-
-                    num_heads = child.num_heads if hasattr(child, 'num_heads') else 3
-                    qkv_bias = True
-                    proj_bias = True
-                    attn_p = child.attn_drop.p if hasattr(child.attn_drop, 'p') else 0.0
-                    proj_p = child.proj_drop.p if hasattr(child.proj_drop, 'p') else 0.0
-                    qk_norm = not isinstance(child.q_norm, nn.Identity)
-                    norm_layer = type(child.q_norm) if qk_norm else nn.LayerNorm
-
-                    new_attn = Attention(
-                        dim=dim,
-                        num_heads=num_heads,
-                        qkv_bias=qkv_bias,
-                        qk_norm=qk_norm,
-                        proj_bias=proj_bias,
-                        attn_drop=attn_p,
-                        proj_drop=proj_p,
-                        norm_layer=norm_layer,
-                        use_plain_qk=True
-                    )
-
-                    setattr(module, name, new_attn)
-                else:
-                    _replace_attn(child)
-
-
-        _replace_attn(self.base_model)
-
+       
         # Restore original Conv2d in patch embedding
         old_proj = self.base_model.patch_embed.proj
         conv2d_params = {
@@ -145,7 +83,10 @@ class ViT_Tiny_uni(nn.Module):
             # "padding_mode": old_proj.padding_mode
         }
         self.base_model.patch_embed.proj = nn.Conv2d(**conv2d_params)
-
+        
+        if norm == 'dyt':
+            convert_ln_to_dyt(self.base_model)
+        
     def forward(self, x):
         out = self.base_model(x)
         kl = get_kl_loss(self.base_model)

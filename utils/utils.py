@@ -417,8 +417,8 @@ def get_model(args, logger, distill=False):
         elif args.model == 'mobilenetv2':
             model = MobileNetV2_dnn(num_classes=10, width_mult=1.0)
         
-        elif args.model == 'vit-tiny-layernorm':
-            model = ViT_Tiny_dnn(num_classes=10)
+        elif args.model == 'vit-tiny-layernorm-nano':
+            model = ViT_Tiny_dnn(num_classes=100, norm='layernorm', model='nano')
 
         elif args.model == 'vit-tiny-dyt':
             model = ViT_Tiny_dnn(num_classes=10, norm='dyt')
