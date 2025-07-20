@@ -60,7 +60,7 @@ class LinearReparameterization(BaseVariationalLayer_):
                  posterior_mu_init=0,
                  posterior_rho_init=-3.0,
                  bias=True,
-                 prior_type=None):
+                 prior_type='normal'):
         """
         Implements Linear layer with reparameterization trick.
 
@@ -150,11 +150,11 @@ class LinearReparameterization(BaseVariationalLayer_):
             sigma_weight,
             self.prior_weight_mu,
             self.prior_weight_sigma,
-            prior=self.prior_type)
+            prior_type=self.prior_type)
         if self.mu_bias is not None:
             sigma_bias = torch.log1p(torch.exp(self.rho_bias))
             kl += self.kl_div(self.mu_bias, sigma_bias,
-                              self.prior_bias_mu, self.prior_bias_sigma, prior=self.prior_type)
+                              self.prior_bias_mu, self.prior_bias_sigma, prior_type=self.prior_type)
         return kl
 
     def forward(self, input, return_kl=True):

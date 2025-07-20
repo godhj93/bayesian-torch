@@ -204,6 +204,7 @@ def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
                     outputs.append(output)
                     kls.append(kl)
                 else:
+                    raise ValueError()
                     output = model(data)
                     kl = get_kl_loss(model)
                     outputs.append(output)
@@ -455,8 +456,8 @@ def get_model(args, logger, distill=False):
         elif args.model == 'mobilenetv2':
             model = MobileNetV2_uni()
             
-        elif args.model == 'vit-tiny-layernorm': 
-            model = ViT_Tiny_uni(num_classes=10)
+        elif args.model == 'vit-tiny-layernorm-nano': 
+            model = ViT_Tiny_uni(num_classes=100, norm = 'layernorm', model = 'nano')
 
         elif args.model == 'vit-tiny-dyt':
             model = ViT_Tiny_uni(num_classes=10, norm='dyt')
@@ -526,9 +527,10 @@ def get_model(args, logger, distill=False):
             if args.type == 'uni':
                 model.linear = LinearReparameterization(64, 100)
                 
-        elif args.model == 'vit-tiny':
-              model.head = torch.nn.Linear(model.head.in_features, 100, bias=True)
-
+        elif args.model == 'vit-tiny-layernorm-nano':
+                
+                if args.type == 'uni':
+                    pass # model.base_model.head = LinearReparameterization(model.base_model.head.in_features, 100, bias=True, prior_type=args.prior_type)
         elif args.model == 'densenet30':
             
             if args.type == 'dnn':
@@ -662,7 +664,7 @@ def get_dataset(args, logger):
         
     elif args.data == 'tinyimagenet':
         
-        img_size = 64
+        img_size = 64//2
         logger.info(colored(f"Tiny ImageNet dataset is loaded, Size: {img_size}x{img_size}", 'green'))
         
         transform_train = transforms.Compose([

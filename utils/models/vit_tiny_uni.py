@@ -8,7 +8,7 @@ from bayesian_torch.layers.variational_layers.linear_variational import LinearRe
 from utils.models.dynamic_tanh import DynamicTanh, convert_gelu_to_relu, convert_ln_to_dyt, convert_ln_to_rms
 
 class ViT_Tiny_uni(nn.Module):
-    def __init__(self, num_classes=10, norm = 'layernorm', model = 'original'):
+    def __init__(self, num_classes=100, norm = 'layernorm', model = 'original'):
         super().__init__()
         const_bnn_prior_parameters = {
             'prior_mu': 0.0,
