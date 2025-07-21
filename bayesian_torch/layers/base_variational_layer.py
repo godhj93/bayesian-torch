@@ -32,6 +32,8 @@ import torch.distributions as distributions
 from itertools import repeat
 import collections
 
+standard_normal = torch.distributions.Normal(0, 1)
+
 def get_kernel_size(x, n):
         if isinstance(x, collections.abc.Iterable):
             return tuple(x)
@@ -70,22 +72,28 @@ class BaseVariationalLayer_(nn.Module):
             return kl.mean()
 
         elif prior_type == 'laplace':
-            # Define the distributions using torch.distributions
-            q_dist = torch.distributions.Normal(mu_q, sigma_q)
-            p_dist = torch.distributions.Laplace(mu_p, sigma_p)
-
-            # 1. Get a sample from q(w) using the reparameterization trick
-            # .rsample() is essential for backpropagation
-            w = q_dist.rsample()
-
-            # 2. Calculate the log probability of the sample w under both distributions
-            log_q_w = q_dist.log_prob(w)
-            log_p_w = p_dist.log_prob(w)
-
-            # 3. Approximate KL(q||p) = E_q[log(q/p)] with a single sample
-            kl = log_q_w - log_p_w
             
-            # 4. Return the mean KL divergence over all parameters
+            # --- 샘플링 대신 해석적 해를 사용한 새로운 구현 ---
+            
+            # Laplace 분포의 스케일 파라미터 b는 sigma_p로 전달됩니다.
+            b_p = torch.tensor(1.0)
+            mu_p = torch.tensor(0.0)
+            print(f"Using Laplace prior with b_p: {b_p}, mu_p: {mu_p}")
+            # Laplace 분포의 위치(mu_p)를 고려하여 mu_q의 오프셋을 계산합니다.
+            mu_q_offset = mu_q - mu_p
+            
+            # 해석적 공식에 따라 KL Divergence를 계산합니다.
+            # KL(q||p) = log(2b) - 0.5*log(2*pi*sigma^2) - 0.5 + (1/b) * E_q[|w - mu_p|]
+            
+            # E_q[|w - mu_p|]는 접힌 정규 분포(Folded Normal)의 평균입니다.
+            exp_abs_val = sigma_q * torch.sqrt(torch.tensor(2.0 / torch.pi)) * \
+                        torch.exp(-mu_q_offset**2 / (2 * sigma_q**2)) + \
+                        mu_q_offset * (1 - 2 * standard_normal.cdf(-mu_q_offset / sigma_q))
+            
+            # 모든 항을 결합합니다.
+            kl = torch.log(2 * b_p) - 0.5 * torch.log(2 * torch.pi * sigma_q**2) - 0.5 + \
+                (1 / b_p) * exp_abs_val
+                
             return kl.mean()
 
         else:

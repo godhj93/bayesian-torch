@@ -402,7 +402,7 @@ class LinearReparameterizationHierarchical_Weightwise(LinearReparameterization):
             bias = self.mu_bias + (sigma_bias * self.eps_bias.data.normal_())
             if return_kl:
                 kl_bias = self.kl_div(self.mu_bias, sigma_bias, self.prior_bias_mu,
-                                      self.prior_bias_sigma)
+                                      self.prior_bias_sigma, prior_type=self.prior_type)
 
         out = F.linear(input, weight, bias)
 
