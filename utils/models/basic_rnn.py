@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class RNN_dnn(nn.Module):
-    def __init__(self, vocab_size, emb_dim=10, hidden_dim=128*2, lstm_layers=1, output_dim=4):
+    def __init__(self, vocab_size, emb_dim=10, hidden_dim=32, lstm_layers=1, output_dim=4):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, emb_dim, padding_idx=0)
         self.lstm = nn.LSTM(

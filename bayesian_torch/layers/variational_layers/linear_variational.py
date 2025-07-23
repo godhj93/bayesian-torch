@@ -59,8 +59,7 @@ class LinearReparameterization(BaseVariationalLayer_):
                  prior_variance=1,
                  posterior_mu_init=0,
                  posterior_rho_init=-3.0,
-                 bias=True,
-                 prior_type='normal'):
+                 bias=True):
         """
         Implements Linear layer with reparameterization trick.
 
@@ -76,13 +75,12 @@ class LinearReparameterization(BaseVariationalLayer_):
             bias: bool -> if set to False, the layer will not learn an additive bias. Default: True,
         """
         super(LinearReparameterization, self).__init__()
-        assert prior_type is not None, "prior_type must be specified for LinearReparameterization layer"
+
         self.in_features = in_features
         self.out_features = out_features
         self.prior_mean = prior_mean
         self.prior_variance = prior_variance
         self.posterior_mu_init = posterior_mu_init,  # mean of weight
-        self.prior_type = prior_type # Store prior type
         # variance of weight --> sigma = log (1 + exp(rho))
         self.posterior_rho_init = posterior_rho_init,
         self.bias = bias
@@ -149,12 +147,11 @@ class LinearReparameterization(BaseVariationalLayer_):
             self.mu_weight,
             sigma_weight,
             self.prior_weight_mu,
-            self.prior_weight_sigma,
-            prior_type=self.prior_type)
+            self.prior_weight_sigma)
         if self.mu_bias is not None:
             sigma_bias = torch.log1p(torch.exp(self.rho_bias))
             kl += self.kl_div(self.mu_bias, sigma_bias,
-                              self.prior_bias_mu, self.prior_bias_sigma, prior_type=self.prior_type)
+                              self.prior_bias_mu, self.prior_bias_sigma)
         return kl
 
     def forward(self, input, return_kl=True):
@@ -168,7 +165,7 @@ class LinearReparameterization(BaseVariationalLayer_):
 
         if return_kl:
             kl_weight = self.kl_div(self.mu_weight, sigma_weight,
-                                    self.prior_weight_mu, self.prior_weight_sigma, prior_type = self.prior_type)
+                                    self.prior_weight_mu, self.prior_weight_sigma)
         bias = None
 
         if self.mu_bias is not None:
@@ -176,7 +173,7 @@ class LinearReparameterization(BaseVariationalLayer_):
             bias = self.mu_bias + (sigma_bias * self.eps_bias.data.normal_())
             if return_kl:
                 kl_bias = self.kl_div(self.mu_bias, sigma_bias, self.prior_bias_mu,
-                                      self.prior_bias_sigma, prior_type = self.prior_type)
+                                      self.prior_bias_sigma)
 
         out = F.linear(input, weight, bias)
 

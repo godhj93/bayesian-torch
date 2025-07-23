@@ -16,23 +16,20 @@ from utils.models.vgg_dnn import VGG7
 from utils.models.vgg_uni import VGG7_uni
 from utils.models.lenet_dnn import LeNet5_dnn
 from utils.models.lenet_uni import LeNet5_uni
-# from utils.models.resnet18_dnn import ResNet18_dnn
-from bayesian_torch.models.deterministic.resnet_large import resnet18 as ResNet18_dnn
-from bayesian_torch.models.bayesian.resnet_variational_large import resnet18 as ResNet18_uni
+from utils.models.resnet18_dnn import ResNet18_dnn
+from utils.models.resnet18_uni import ResNet18_uni
 from utils.models.vit_tiny_dnn import ViT_Tiny_dnn
 from utils.models.vit_tiny_uni import ViT_Tiny_uni
 from utils.models.mlp_dnn import MLP_dnn
 from utils.models.mlp_uni import MLP_uni
 from utils.models.wideresnet_dnn import *
 from utils.models.basic_rnn import RNN_dnn
-from utils.models.basic_rnn_uni import RNN_uni
 from bayesian_torch.models.bayesian.resnet_variational import resnet20 as resnet20_uni
 from bayesian_torch.models.deterministic.resnet import resnet20 as resnet20_deterministic
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
 from bayesian_torch.layers.variational_layers.conv_variational import Conv2dReparameterization, Conv2dReparameterization_Multivariate
 from bayesian_torch.layers.variational_layers.linear_variational import LinearReparameterization
-from bayesian_torch.models.bayesian.resnet_hvariational import resnet20 as resnet20_hvariational
-from bayesian_torch.layers.variational_layers.hiearchial_variational_layers import Conv2dReparameterizationHierarchical, LinearReparameterizationHierarchical
+
 # Dataset
 from torchvision import datasets, transforms
 
@@ -53,7 +50,7 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
     best_acc = 0
     
     early_stopping = EarlyStopping(patience=100, min_delta=0.0)
-    
+
     for e in range(epoch):
         if args.train_sampler:
             args.train_sampler.set_epoch(e)            
@@ -65,13 +62,6 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
         total = 0
         
         pbar = tqdm(enumerate(train_loader))
-        N = len(train_loader.dataset)
-        
-        if args.scale == 'N':
-            scaling = N
-        else:
-            scaling = bs
-            
         for batch_idx, (data, target) in pbar:
     
             data, target = data.to(device), target.to(device)
@@ -94,27 +84,27 @@ def train_BNN(epoch, model, train_loader, test_loader, optimizer, writer, args, 
             
             _, predicted = torch.max(output.data, 1)
             
-            nll = F.cross_entropy(output, target)
+            nll = F.cross_entropy(output, target) 
             
-            loss = nll * (1/args.t) + kl_loss / scaling #N # args.t: Cold posterior temperature
+            loss = nll * (1/args.t) + kl_loss / bs # args.t: Cold posterior temperature
             # loss = nll
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             
             nll_total.append(nll.detach().cpu())
-            kl_total.append(kl_loss.detach().cpu() / scaling)
+            kl_total.append(kl_loss.detach().cpu() / bs)
             
             total += target.size(0)
             correct += (predicted == target).sum().item()
             acc = correct / total            
             
-            pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):,}, KL scaling: {scaling}", 'blue'))
+            pbar.set_description(colored(f"[Train] Epoch: {e+1}/{epoch}, Acc: {acc:.5f}, NLL: {np.mean(nll_total):.5f} KL: {np.mean(kl_total):,}", 'blue'))
             
         args.scheduler.step()
         
         acc_test, nll, kl = test_BNN(model = model, test_loader = test_loader, bs = bs, mc_runs = mc_runs, device = device, args = args)
-        logger.info(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}, KL scaling: {scaling}")
+        logger.info(f"[Test] Acc: {acc_test:.5f}, NLL: {nll:.5f}, KL: {kl:,}")
         
         # args.scheduler.step()
         # print(colored(f"Learning rate: {optimizer.param_groups[0]['lr']}", 'red'))
@@ -183,14 +173,8 @@ def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
     total = 0
     nll_total = []
     kl_total = []
-    mc_runs = 30
     
-    N = len(test_loader.dataset)
-    if args.scale == 'N':
-        scaling = N
-    else:
-        scaling = bs
-        
+    mc_runs = 30
     with torch.no_grad():
         
         for data, target in tqdm(test_loader, desc=f'Testing [MC_runs={mc_runs}]'):
@@ -204,7 +188,6 @@ def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
                     outputs.append(output)
                     kls.append(kl)
                 else:
-                    raise ValueError()
                     output = model(data)
                     kl = get_kl_loss(model)
                     outputs.append(output)
@@ -218,7 +201,7 @@ def test_BNN(model, test_loader, bs, device, args, moped=False, mc_runs = 30):
             nll = F.cross_entropy(output, target) 
             
             nll_total.append(nll.item())
-            kl_total.append(kl.item() / scaling)
+            kl_total.append(kl.item() / bs)
             
             total += target.size(0)
             correct += (predicted == target).sum().item()
@@ -385,14 +368,11 @@ def get_model(args, logger, distill=False):
         
     if args.type == 'dnn':
             
-        if args.model == 'resnet20' or args.model == 'resnet20_h':
+        if args.model == 'resnet20':
             model = resnet20_deterministic()
 
         elif args.model == 'resnet18':
-            if args.data == 'imagenet':
-                model = ResNet18_dnn(num_classes=1000, pretrained=True)
-            # else:
-                # model = ResNet18_dnn(num_classes=100, pretrained=False)
+            model = ResNet18_dnn()
             
         elif args.model == 'wrn10-1':
             model = wrn10_1()
@@ -418,23 +398,17 @@ def get_model(args, logger, distill=False):
         elif args.model == 'mobilenetv2':
             model = MobileNetV2_dnn(num_classes=10, width_mult=1.0)
         
-        elif args.model == 'vit-tiny-layernorm-nano':
-            model = ViT_Tiny_dnn(num_classes=100, norm='layernorm', model='nano')
+        elif args.model == 'vit-tiny':
+            model = ViT_Tiny_dnn(num_classes=10)
 
-        elif args.model == 'vit-tiny-dyt':
-            model = ViT_Tiny_dnn(num_classes=10, norm='dyt')
-        
-        elif args.model == 'vit-tiny-rms':
-            model = ViT_Tiny_dnn(num_classes=10, norm='rms')
-
-        elif args.model == 'vit-tiny-layernorm-relu':
-            model = ViT_Tiny_dnn(num_classes=10, norm='layernorm', act='relu')
-            print(model)
         elif args.model == 'mlp':
             model = MLP_dnn(input_size=28*28, hidden_size=100, output_size=10)
             
         elif args.model == 'basic_rnn':
             model = RNN_dnn(vocab_size=30522) # vocab_size from ag_news dataset
+
+        elif args.model == 'mlp_reg':
+            model = MLP_dnn_reg(input_size=28*28, hidden_size=100, output_size=1)
             
         else:
             raise ValueError('Model not found')
@@ -442,34 +416,22 @@ def get_model(args, logger, distill=False):
     elif args.type == 'uni':
             
         if args.model == 'resnet20':
-            model = resnet20_uni(args.prior_type)
-            
-        elif args.model == 'resnet20_h':
-            model = resnet20_hvariational()
+            model = resnet20_uni()
             
         elif args.model == 'densenet30':
-            model = densenet_bc_30_uni(prior_type=args.prior_type)
+            model = densenet_bc_30_uni()
 
         elif args.model == 'resnet18':
-            model = ResNet18_uni(pretrained=False)
+            model = ResNet18_uni()
             
         elif args.model == 'mobilenetv2':
             model = MobileNetV2_uni()
             
-        elif args.model == 'vit-tiny-layernorm-nano': 
-            model = ViT_Tiny_uni(num_classes=100, norm = 'layernorm', model = 'nano')
-
-        elif args.model == 'vit-tiny-dyt':
-            model = ViT_Tiny_uni(num_classes=10, norm='dyt')
-
-        elif args.model == 'vit-tiny-rms':
-            model = ViT_Tiny_uni(num_classes=10, norm='rms')
+        elif args.model == 'vit-tiny': 
+            model = ViT_Tiny_uni(num_classes=10)
             
         elif args.model == 'mlp':
             model = MLP_uni(input_size=28*28, hidden_size=100, output_size=10)
-        
-        elif args.model == 'basic_rnn':
-            model = RNN_uni(vocab_size=30522)
             
         else:
             raise ValueError('Model not found')
@@ -527,16 +489,15 @@ def get_model(args, logger, distill=False):
             if args.type == 'uni':
                 model.linear = LinearReparameterization(64, 100)
                 
-        elif args.model == 'vit-tiny-layernorm-nano':
-                
-                if args.type == 'uni':
-                    pass # model.base_model.head = LinearReparameterization(model.base_model.head.in_features, 100, bias=True, prior_type=args.prior_type)
+        elif args.model == 'vit-tiny':
+              model.head = torch.nn.Linear(model.head.in_features, 100, bias=True)
+
         elif args.model == 'densenet30':
             
             if args.type == 'dnn':
                 model.classifier = torch.nn.Linear(model.classifier.in_features, 100, bias = True)
             if args.type == 'uni':
-                model.classifier = LinearReparameterization(model.classifier.in_features, 100, bias = True, prior_type=args.prior_type)
+                model.classifier = LinearReparameterization(model.classifier.in_features, 100, bias = True)
         else:
             
             raise NotImplementedError("Not implemented yet")
@@ -558,28 +519,15 @@ def get_model(args, logger, distill=False):
                 model.linear = torch.nn.Linear(64, 200)
             elif args.type == 'uni':
                 model.linear = LinearReparameterization(64, 200)
-        
-        elif args.model == 'resnet20_h':
-            if args.type == 'dnn':
-                model.linear = torch.nn.Linear(64, 200)
-            elif args.type == 'uni':
-                model.linear = LinearReparameterizationHierarchical(64, 200)
-                
+            
         elif args.model == 'densenet30':
             if args.type == 'dnn':
                 model.classifier = torch.nn.Linear(model.classifier.in_features, 200, bias = True)
             elif args.type == 'uni':
-                model.classifier = LinearReparameterization(model.classifier.in_features, 200, bias = True, prior_type=args.prior_type)
+                model.classifier = LinearReparameterization(model.classifier.in_features, 200, bias = True)
                 
         else:
             raise NotImplementedError("Not implemented yet")
-    
-    elif args.data == 'imagenet':
-        
-        if args.model == 'resnet18':
-            # model.base_model.fc = torch.nn.Linear(512, 1000)
-            print(model)
-            
     
     elif args.data == 'svhn':
         pass
@@ -664,7 +612,7 @@ def get_dataset(args, logger):
         
     elif args.data == 'tinyimagenet':
         
-        img_size = 64//2
+        img_size = 64
         logger.info(colored(f"Tiny ImageNet dataset is loaded, Size: {img_size}x{img_size}", 'green'))
         
         transform_train = transforms.Compose([
@@ -688,42 +636,6 @@ def get_dataset(args, logger):
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=args.bs, shuffle=True, num_workers=4, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=args.bs, shuffle=False, num_workers=4, pin_memory=True)
          
-    elif args.data == 'imagenet':
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
-        traindir = os.path.join('imagenet', 'train')
-        valdir = os.path.join('imagenet', 'val')
-        
-        transform_train = transforms.Compose([
-                transforms.RandomResizedCrop(224),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                normalize,
-            ])
-        
-        transform_test = transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                normalize,
-            ])
-        
-        train_dataset = datasets.ImageFolder(
-            traindir,
-            transform=transform_train)
-
-        val_dataset = datasets.ImageFolder(
-            valdir,
-            transform=transform_test
-            )
-        
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=args.bs, shuffle=True,
-            num_workers=4, pin_memory=True)
-        test_loader = torch.utils.data.DataLoader(
-            val_dataset, batch_size=args.bs, shuffle=False,
-            num_workers=4, pin_memory=True)
-        
     elif args.data == 'svhn':
         
         logger.info(colored(f"SVHN dataset is loaded", 'green'))

@@ -6,7 +6,7 @@ from bayesian_torch.layers.variational_layers import Conv2dReparameterization, L
 # Bayesian DenseLayer (Bottleneck 구조)
 class _DenseLayer(nn.Module):
     def __init__(self, in_channels, growth_rate, bn_size, drop_rate,
-                 prior_mean, prior_variance, posterior_mu_init, posterior_rho_init, prior_type):
+                 prior_mean, prior_variance, posterior_mu_init, posterior_rho_init):
         super(_DenseLayer, self).__init__()
         self.norm1 = nn.BatchNorm2d(in_channels)
         self.relu1 = nn.ReLU(inplace=True)
@@ -14,7 +14,7 @@ class _DenseLayer(nn.Module):
         self.conv1 = Conv2dReparameterization(
             in_channels, bn_size * growth_rate,
             kernel_size=1, bias=False,
-            prior_mean=prior_mean, prior_variance=prior_variance, prior_type = prior_type,
+            prior_mean=prior_mean, prior_variance=prior_variance,
             posterior_mu_init=posterior_mu_init, posterior_rho_init=posterior_rho_init
         )
         self.norm2 = nn.BatchNorm2d(bn_size * growth_rate)
@@ -23,7 +23,7 @@ class _DenseLayer(nn.Module):
         self.conv2 = Conv2dReparameterization(
             bn_size * growth_rate, growth_rate,
             kernel_size=3, padding=1, bias=False,
-            prior_mean=prior_mean, prior_variance=prior_variance, prior_type = prior_type,
+            prior_mean=prior_mean, prior_variance=prior_variance,
             posterior_mu_init=posterior_mu_init, posterior_rho_init=posterior_rho_init
         )
         self.drop_rate = drop_rate
@@ -42,13 +42,13 @@ class _DenseLayer(nn.Module):
 # Bayesian DenseBlock: 여러 DenseLayer를 연결하며 각 층의 출력을 concatenate
 class _DenseBlock(nn.Module):
     def __init__(self, num_layers, in_channels, growth_rate, bn_size, drop_rate,
-                 prior_mean, prior_variance, posterior_mu_init, posterior_rho_init, prior_type):
+                 prior_mean, prior_variance, posterior_mu_init, posterior_rho_init):
         super(_DenseBlock, self).__init__()
         self.layers = nn.ModuleList()
         for i in range(num_layers):
             layer = _DenseLayer(
                 in_channels + i * growth_rate, growth_rate, bn_size, drop_rate,
-                prior_mean, prior_variance, posterior_mu_init, posterior_rho_init, prior_type
+                prior_mean, prior_variance, posterior_mu_init, posterior_rho_init
             )
             self.layers.append(layer)
 
@@ -64,13 +64,13 @@ class _DenseBlock(nn.Module):
 # Bayesian Transition Layer: 1x1 conv (채널 압축) + 평균 풀링 (다운샘플링)
 class _Transition(nn.Module):
     def __init__(self, in_channels, out_channels,
-                 prior_mean, prior_variance, posterior_mu_init, posterior_rho_init, prior_type):
+                 prior_mean, prior_variance, posterior_mu_init, posterior_rho_init):
         super(_Transition, self).__init__()
         self.norm = nn.BatchNorm2d(in_channels)
         self.relu = nn.ReLU(inplace=True)
         self.conv = Conv2dReparameterization(
             in_channels, out_channels, kernel_size=1, bias=False,
-            prior_mean=prior_mean, prior_variance=prior_variance, prior_type = prior_type,
+            prior_mean=prior_mean, prior_variance=prior_variance,
             posterior_mu_init=posterior_mu_init, posterior_rho_init=posterior_rho_init
         )
         self.pool = nn.AvgPool2d(kernel_size=2, stride=2)
@@ -87,7 +87,7 @@ class DenseNet_BC_30_uni(nn.Module):
     def __init__(self, growth_rate=8, block_config=(10, 10, 10),
                  num_init_features=16, bn_size=4, drop_rate=0, num_classes=10,
                  prior_mean=0.0, prior_variance=1.0,
-                 posterior_mu_init=0.0, posterior_rho_init=-3.0, prior_type=None):
+                 posterior_mu_init=0.0, posterior_rho_init=-3.0):
         """
         Args:
             growth_rate (int): 각 DenseLayer가 추가하는 채널 수.
@@ -102,9 +102,6 @@ class DenseNet_BC_30_uni(nn.Module):
             posterior_rho_init (float): posterior rho 초기값.
         """
         super(DenseNet_BC_30_uni, self).__init__()
-        
-        assert prior_type is not None, "prior_type must be specified for DenseNet_BC_30_uni"
-        
         self.prior_mean = prior_mean
         self.prior_variance = prior_variance
         self.posterior_mu_init = posterior_mu_init
@@ -121,7 +118,6 @@ class DenseNet_BC_30_uni(nn.Module):
                 bias=False,
                 prior_mean=prior_mean,
                 prior_variance=prior_variance,
-                prior_type = prior_type,
                 posterior_mu_init=posterior_mu_init,
                 posterior_rho_init=posterior_rho_init
             )
@@ -138,8 +134,7 @@ class DenseNet_BC_30_uni(nn.Module):
             prior_mean=prior_mean,
             prior_variance=prior_variance,
             posterior_mu_init=posterior_mu_init,
-            posterior_rho_init=posterior_rho_init,
-            prior_type = prior_type
+            posterior_rho_init=posterior_rho_init
         )
         num_features = num_features + block_config[0] * growth_rate
         self.transition1 = _Transition(
@@ -148,8 +143,7 @@ class DenseNet_BC_30_uni(nn.Module):
             prior_mean=prior_mean,
             prior_variance=prior_variance,
             posterior_mu_init=posterior_mu_init,
-            posterior_rho_init=posterior_rho_init,
-            prior_type = prior_type
+            posterior_rho_init=posterior_rho_init
         )
         num_features = int(num_features * 0.5)
 
@@ -163,8 +157,7 @@ class DenseNet_BC_30_uni(nn.Module):
             prior_mean=prior_mean,
             prior_variance=prior_variance,
             posterior_mu_init=posterior_mu_init,
-            posterior_rho_init=posterior_rho_init,
-            prior_type = prior_type
+            posterior_rho_init=posterior_rho_init
         )
         num_features = num_features + block_config[1] * growth_rate
         self.transition2 = _Transition(
@@ -173,8 +166,7 @@ class DenseNet_BC_30_uni(nn.Module):
             prior_mean=prior_mean,
             prior_variance=prior_variance,
             posterior_mu_init=posterior_mu_init,
-            posterior_rho_init=posterior_rho_init,
-            prior_type = prior_type
+            posterior_rho_init=posterior_rho_init
         )
         num_features = int(num_features * 0.5)
 
@@ -188,21 +180,18 @@ class DenseNet_BC_30_uni(nn.Module):
             prior_mean=prior_mean,
             prior_variance=prior_variance,
             posterior_mu_init=posterior_mu_init,
-            posterior_rho_init=posterior_rho_init,
-            prior_type = prior_type
+            posterior_rho_init=posterior_rho_init
         )
         num_features = num_features + block_config[2] * growth_rate
 
         self.norm_final = nn.BatchNorm2d(num_features)
-        
         self.classifier = LinearReparameterization(
             in_features=num_features,
             out_features=num_classes,
             prior_mean=prior_mean,
             prior_variance=prior_variance,
             posterior_mu_init=posterior_mu_init,
-            posterior_rho_init=posterior_rho_init,
-            prior_type = prior_type
+            posterior_rho_init=posterior_rho_init
         )
 
     def forward(self, x):
@@ -246,8 +235,7 @@ def densenet_bc_30_uni(num_classes=10,
                        prior_mean=0.0,
                        prior_variance=1.0,
                        posterior_mu_init=0.0,
-                       posterior_rho_init=-3.0,
-                       prior_type=None):
+                       posterior_rho_init=-3.0):
     return DenseNet_BC_30_uni(
         growth_rate=growth_rate,
         block_config=block_config,
@@ -258,8 +246,7 @@ def densenet_bc_30_uni(num_classes=10,
         prior_mean=prior_mean,
         prior_variance=prior_variance,
         posterior_mu_init=posterior_mu_init,
-        posterior_rho_init=posterior_rho_init,
-        prior_type=prior_type
+        posterior_rho_init=posterior_rho_init
     )
 
 # 사용 예시
